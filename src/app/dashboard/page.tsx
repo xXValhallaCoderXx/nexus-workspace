@@ -14,7 +14,6 @@ import { RecentMeetingsPanel } from "@/components/dashboard/recent-meetings-pane
 import { ConnectionsPanel } from "@/components/dashboard/connections-panel";
 import { WorkflowsPanel } from "@/components/dashboard/workflows-panel";
 import { HowItWorksBox } from "@/components/dashboard/how-it-works-box";
-import { DriveFilesPanel } from "@/components/dashboard/drive-files-panel";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -115,10 +114,6 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Drive Transcripts */}
-        <div className="mt-4">
-          <DriveFilesPanel />
-        </div>
       </div>
     </>
   );

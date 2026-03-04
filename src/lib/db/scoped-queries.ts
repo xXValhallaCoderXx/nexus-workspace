@@ -12,6 +12,8 @@ export async function upsertUserConfig(
     selectedDestination?: string;
     encryptedOpenRouterKey?: string | null;
     encryptedSlackWebhookUrl?: string | null;
+    slackUserId?: string | null;
+    customSystemPrompt?: string | null;
     drivePageToken?: string | null;
   }
 ) {
@@ -131,6 +133,12 @@ export async function getRecentMeetings(userId: string, limit = 5) {
 export async function getProcessingJobCount(userId: string) {
   return prisma.jobHistory.count({
     where: { userId, status: "PROCESSING" },
+  });
+}
+
+export async function getJobById(jobId: string, userId: string) {
+  return prisma.jobHistory.findFirst({
+    where: { id: jobId, userId },
   });
 }
 

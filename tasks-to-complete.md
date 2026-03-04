@@ -147,7 +147,31 @@ npm run dev
 
 ---
 
-## 10. Production Deployment (Vercel)
+## 11. Slack Integration
+
+- [ ] Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps) (or use your existing bot)
+- [ ] Under **OAuth & Permissions**, add a Redirect URL:
+  - Local: `http://localhost:3000/api/auth/slack/callback`
+  - Production: `https://<your-domain>/api/auth/slack/callback`
+- [ ] Under **OAuth & Permissions → User Token Scopes**, add: `openid`
+- [ ] Copy the **Client ID** and **Client Secret** into `.env.local`:
+  ```
+  SLACK_CLIENT_ID=<your-client-id>
+  SLACK_CLIENT_SECRET=<your-client-secret>
+  ```
+- [ ] Copy your existing bot's token (starts with `xoxb-`) into `.env.local`:
+  ```
+  SLACK_BOT_TOKEN=xoxb-<your-bot-token>
+  ```
+- [ ] Run the DB migration:
+  ```sh
+  npx prisma migrate dev --name add_slack_user_id
+  ```
+- [ ] Update the `.env.local` checklist in step 8 to include the three new variables
+
+---
+
+
 
 - [ ] Connect the GitHub repo to a [Vercel](https://vercel.com/) project
 - [ ] Add all environment variables from step 8 in Vercel dashboard (Settings → Environment Variables)

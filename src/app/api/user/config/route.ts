@@ -9,6 +9,7 @@ const updateConfigSchema = z.object({
   selectedDestination: z.enum(["DATABASE", "SLACK"]).optional(),
   slackWebhookUrl: z.string().url().optional(),
   openRouterApiKey: z.string().nullable().optional(),
+  customSystemPrompt: z.string().nullable().optional(),
 });
 
 export async function GET() {
@@ -24,6 +25,8 @@ export async function GET() {
     selectedDestination: config?.selectedDestination ?? "DATABASE",
     hasOpenRouterKey: !!config?.encryptedOpenRouterKey,
     hasSlackWebhook: !!config?.encryptedSlackWebhookUrl,
+    hasSlackConnected: !!config?.slackUserId,
+    customSystemPrompt: config?.customSystemPrompt ?? null,
   });
 }
 
@@ -54,6 +57,9 @@ export async function PATCH(request: Request) {
     data.encryptedOpenRouterKey = parsed.data.openRouterApiKey
       ? encrypt(parsed.data.openRouterApiKey)
       : null;
+  }
+  if (parsed.data.customSystemPrompt !== undefined) {
+    data.customSystemPrompt = parsed.data.customSystemPrompt;
   }
 
   await upsertUserConfig(session.user.id, data);

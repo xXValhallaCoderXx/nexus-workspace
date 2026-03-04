@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { FilterChip } from "@/components/ui/filter-chip";
+import { SearchInput } from "@/components/ui/search-input";
+import { NoteDetailModal } from "@/components/dashboard/note-detail-modal";
+import { useNoteModal } from "@/hooks/use-note-modal";
 
 interface DriveFile {
   fileId: string;
@@ -11,6 +15,14 @@ interface DriveFile {
   jobStatus: string | null;
   jobId: string | null;
 }
+
+const statusFilters = [
+  { label: "All", value: "" },
+  { label: "Ready", value: "COMPLETED" },
+  { label: "Processing", value: "PROCESSING" },
+  { label: "Not Processed", value: "NONE" },
+  { label: "Failed", value: "FAILED" },
+];
 
 function MicIcon() {
   return (
@@ -40,11 +52,14 @@ function formatDate(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export function DriveFilesPanel() {
+function DriveFilesPanelInner() {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [triggeringFileId, setTriggeringFileId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const { activeNoteId, openNote, closeNote } = useNoteModal();
 
   async function fetchFiles() {
     setLoading(true);
@@ -67,6 +82,29 @@ export function DriveFilesPanel() {
   useEffect(() => {
     fetchFiles();
   }, []);
+
+  const filteredFiles = useMemo(() => {
+    let result = files;
+
+    if (statusFilter === "COMPLETED") {
+      result = result.filter((f) => f.jobStatus === "COMPLETED");
+    } else if (statusFilter === "PROCESSING") {
+      result = result.filter(
+        (f) => f.jobStatus === "PROCESSING" || f.jobStatus === "PENDING"
+      );
+    } else if (statusFilter === "FAILED") {
+      result = result.filter((f) => f.jobStatus === "FAILED");
+    } else if (statusFilter === "NONE") {
+      result = result.filter((f) => f.jobStatus === null);
+    }
+
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((f) => f.fileName.toLowerCase().includes(q));
+    }
+
+    return result;
+  }, [files, statusFilter, search]);
 
   async function triggerProcess(fileId: string, fileName: string) {
     setTriggeringFileId(fileId);
@@ -105,64 +143,110 @@ export function DriveFilesPanel() {
         }
       />
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-3">
+        <div className="flex gap-1.5">
+          {statusFilters.map((f) => (
+            <FilterChip
+              key={f.value}
+              label={f.label}
+              active={statusFilter === f.value}
+              onClick={() => setStatusFilter(f.value)}
+            />
+          ))}
+        </div>
+        <div className="ml-auto">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search files..."
+          />
+        </div>
+      </div>
+
       {loading && files.length === 0 ? (
         <div className="px-5 py-10 text-center text-xs text-muted2">
           Loading transcript files...
         </div>
       ) : error ? (
         <div className="px-5 py-10 text-center text-xs text-red">{error}</div>
-      ) : files.length === 0 ? (
+      ) : filteredFiles.length === 0 ? (
         <div className="px-5 py-10 text-center text-xs text-muted2">
-          No transcript files found in your Google Drive
+          {files.length === 0
+            ? "No transcript files found in your Google Drive"
+            : "No files match your filters"}
         </div>
       ) : (
         <div className="py-1.5">
-          {files.map((f) => (
-            <div
-              key={f.fileId}
-              className="flex items-center gap-3 px-5 py-3"
-            >
-              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-brand-lt">
-                <MicIcon />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-semibold text-text">
-                  {f.fileName}
+          {filteredFiles.map((f) => {
+            const isReady = f.jobStatus === "COMPLETED";
+
+            return (
+              <div
+                key={f.fileId}
+                onClick={() => isReady && f.jobId && openNote(f.jobId)}
+                className={`flex items-center gap-3 px-5 py-3 ${
+                  isReady ? "cursor-pointer hover:bg-bg" : ""
+                }`}
+              >
+                <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-brand-lt">
+                  <MicIcon />
                 </div>
-                <div className="mt-[3px] text-[11px] text-muted2">
-                  {formatDate(f.modifiedTime)}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-semibold text-text">
+                    {f.fileName}
+                  </div>
+                  <div className="mt-[3px] text-[11px] text-muted2">
+                    {formatDate(f.modifiedTime)}
+                  </div>
                 </div>
-              </div>
-              <div className="shrink-0">
-                {f.jobStatus === "COMPLETED" ? (
-                  <StatusBadge variant="ready">Ready</StatusBadge>
-                ) : f.jobStatus === "PROCESSING" || f.jobStatus === "PENDING" ? (
-                  <StatusBadge variant="processing">Processing</StatusBadge>
-                ) : f.jobStatus === "FAILED" ? (
-                  <div className="flex items-center gap-2">
-                    <StatusBadge variant="failed">Failed</StatusBadge>
+                <div className="shrink-0">
+                  {f.jobStatus === "COMPLETED" ? (
+                    <StatusBadge variant="ready">Ready</StatusBadge>
+                  ) : f.jobStatus === "PROCESSING" || f.jobStatus === "PENDING" ? (
+                    <StatusBadge variant="processing">Processing</StatusBadge>
+                  ) : f.jobStatus === "FAILED" ? (
+                    <div className="flex items-center gap-2">
+                      <StatusBadge variant="failed">Failed</StatusBadge>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerProcess(f.fileId, f.fileName);
+                        }}
+                        disabled={triggeringFileId !== null}
+                        className="rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      onClick={() => triggerProcess(f.fileId, f.fileName)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerProcess(f.fileId, f.fileName);
+                      }}
                       disabled={triggeringFileId !== null}
                       className="rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                     >
-                      Retry
+                      {triggeringFileId === f.fileId ? "Queuing..." : "Process"}
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => triggerProcess(f.fileId, f.fileName)}
-                    disabled={triggeringFileId !== null}
-                    className="rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    {triggeringFileId === f.fileId ? "Queuing..." : "Process"}
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+
+      <NoteDetailModal jobId={activeNoteId} onClose={closeNote} />
     </Card>
+  );
+}
+
+export function DriveFilesPanel() {
+  return (
+    <Suspense>
+      <DriveFilesPanelInner />
+    </Suspense>
   );
 }

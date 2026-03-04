@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { NoteDetailModal } from "@/components/dashboard/note-detail-modal";
+import { useNoteModal } from "@/hooks/use-note-modal";
 
 interface Job {
   id: string;
@@ -33,7 +35,7 @@ function formatDate(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export function HistoryTable({
+function HistoryTableInner({
   jobs,
   currentPage,
   totalPages,
@@ -42,7 +44,7 @@ export function HistoryTable({
   currentPage: number;
   totalPages: number;
 }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { activeNoteId, openNote, closeNote } = useNoteModal();
 
   if (jobs.length === 0) {
     return (
@@ -77,39 +79,29 @@ export function HistoryTable({
           <tbody>
             {jobs.map((job) => {
               const st = statusMap[job.status] ?? { variant: "pending" as const, label: job.status };
-              const hasPayload = job.status === "COMPLETED" && job.resultPayload;
-              const isExpanded = expandedId === job.id;
+              const isReady = job.status === "COMPLETED";
 
               return (
-                <>
-                  <tr
-                    key={job.id}
-                    onClick={() => hasPayload && setExpandedId(isExpanded ? null : job.id)}
-                    className={hasPayload ? "cursor-pointer hover:bg-bg" : ""}
-                  >
-                    <td className="border-b border-border px-4 py-3 text-[13px]">
-                      <div className="font-semibold text-text">
-                        {job.sourceFileName ?? "Untitled"}
-                      </div>
-                    </td>
-                    <td className="border-b border-border px-4 py-3 text-[13px] text-muted2">
-                      {formatDate(job.createdAt)}
-                    </td>
-                    <td className="border-b border-border px-4 py-3 text-[13px] text-muted2">
-                      {job.destinationDelivered ?? "—"}
-                    </td>
-                    <td className="border-b border-border px-4 py-3">
-                      <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
-                    </td>
-                  </tr>
-                  {isExpanded && job.resultPayload && (
-                    <tr key={`${job.id}-expand`}>
-                      <td colSpan={4} className="border-b border-border bg-bg px-4 py-4">
-                        <SummaryView payload={job.resultPayload as unknown as MeetingSummary} />
-                      </td>
-                    </tr>
-                  )}
-                </>
+                <tr
+                  key={job.id}
+                  onClick={() => isReady && openNote(job.id)}
+                  className={isReady ? "cursor-pointer hover:bg-bg" : ""}
+                >
+                  <td className="border-b border-border px-4 py-3 text-[13px]">
+                    <div className="font-semibold text-text">
+                      {job.sourceFileName ?? "Untitled"}
+                    </div>
+                  </td>
+                  <td className="border-b border-border px-4 py-3 text-[13px] text-muted2">
+                    {formatDate(job.createdAt)}
+                  </td>
+                  <td className="border-b border-border px-4 py-3 text-[13px] text-muted2">
+                    {job.destinationDelivered ?? "—"}
+                  </td>
+                  <td className="border-b border-border px-4 py-3">
+                    <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
+                  </td>
+                </tr>
               );
             })}
           </tbody>
@@ -143,56 +135,20 @@ export function HistoryTable({
           </Link>
         </div>
       )}
+
+      <NoteDetailModal jobId={activeNoteId} onClose={closeNote} />
     </>
   );
 }
 
-interface MeetingSummary {
-  title: string;
-  date?: string;
-  attendees: string[];
-  summary: string;
-  actionItems: Array<{ owner: string; task: string; deadline?: string }>;
-  decisions: string[];
-  followUps: string[];
-}
-
-function SummaryView({ payload }: { payload: MeetingSummary }) {
+export function HistoryTable(props: {
+  jobs: Job[];
+  currentPage: number;
+  totalPages: number;
+}) {
   return (
-    <div className="space-y-3 text-xs">
-      <div>
-        <h4 className="font-semibold text-text">{payload.title}</h4>
-        {payload.date && <p className="text-muted2">{payload.date}</p>}
-        {payload.attendees.length > 0 && (
-          <p className="text-muted2">Attendees: {payload.attendees.join(", ")}</p>
-        )}
-      </div>
-      <p className="whitespace-pre-wrap leading-relaxed text-muted">
-        {payload.summary}
-      </p>
-      {payload.actionItems.length > 0 && (
-        <div>
-          <h5 className="font-semibold text-text">Action Items</h5>
-          <ul className="mt-1 list-disc pl-5 text-muted">
-            {payload.actionItems.map((item, i) => (
-              <li key={i}>
-                <strong className="text-text">{item.owner}:</strong> {item.task}
-                {item.deadline && ` (by ${item.deadline})`}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {payload.decisions.length > 0 && (
-        <div>
-          <h5 className="font-semibold text-text">Decisions</h5>
-          <ul className="mt-1 list-disc pl-5 text-muted">
-            {payload.decisions.map((d, i) => (
-              <li key={i}>{d}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+    <Suspense>
+      <HistoryTableInner {...props} />
+    </Suspense>
   );
 }

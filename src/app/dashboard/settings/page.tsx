@@ -6,6 +6,7 @@ import { SettingsConnections } from "./settings-connections";
 import { SettingsWorkflows } from "./settings-workflows";
 import { SettingsDestination } from "./settings-destination";
 import { SettingsApiKey } from "./settings-api-key";
+import { SettingsModelContext } from "./settings-model-context";
 
 export default async function SettingsPage() {
   const session = await getSession();
@@ -38,9 +39,12 @@ export default async function SettingsPage() {
           />
           <SettingsDestination
             selectedDestination={config?.selectedDestination ?? "DATABASE"}
-            hasSlackWebhook={!!config?.encryptedSlackWebhookUrl}
+            hasSlackConnected={!!config?.slackUserId}
           />
           <SettingsApiKey hasCustomKey={!!config?.encryptedOpenRouterKey} />
+          <SettingsModelContext
+            customSystemPrompt={config?.customSystemPrompt ?? null}
+          />
         </div>
       </div>
     </>

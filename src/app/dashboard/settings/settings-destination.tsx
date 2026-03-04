@@ -1,38 +1,42 @@
 "use client";
 
 import { useState } from "react";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export function SettingsDestination({
   selectedDestination,
-  hasSlackWebhook,
+  hasSlackConnected,
 }: {
   selectedDestination: string;
-  hasSlackWebhook: boolean;
+  hasSlackConnected: boolean;
 }) {
   const [destination, setDestination] = useState(selectedDestination);
-  const [slackUrl, setSlackUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   async function handleSave() {
     setLoading(true);
     setSaved(false);
     try {
-      const body: Record<string, string> = { selectedDestination: destination };
-      if (destination === "SLACK" && slackUrl) {
-        body.slackWebhookUrl = slackUrl;
-      }
       const res = await fetch("/api/user/config", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ selectedDestination: destination }),
       });
-      if (res.ok) {
-        setSaved(true);
-        setSlackUrl("");
-      }
+      if (res.ok) setSaved(true);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    try {
+      const res = await fetch("/api/auth/slack/disconnect", { method: "POST" });
+      if (res.ok) window.location.reload();
+    } finally {
+      setDisconnecting(false);
     }
   }
 
@@ -52,17 +56,39 @@ export function SettingsDestination({
       </select>
 
       {destination === "SLACK" && (
-        <input
-          type="url"
-          placeholder={
-            hasSlackWebhook
-              ? "Webhook configured — enter new URL to update"
-              : "Slack Webhook URL"
-          }
-          value={slackUrl}
-          onChange={(e) => setSlackUrl(e.target.value)}
-          className="mb-2 w-full rounded-[9px] border border-border bg-bg px-3 py-[9px] font-sans text-[13px] text-text outline-none transition-colors placeholder:text-muted2 focus:border-brand-md"
-        />
+        <div className="mb-3 flex items-center justify-between rounded-[9px] border border-border bg-bg px-3 py-[9px]">
+          <div>
+            <div className="text-[13px] font-medium text-text">
+              Slack Account
+            </div>
+            <div className="mt-[2px] text-[11px] text-muted2">
+              {hasSlackConnected
+                ? "Connected — summaries will be sent as a DM"
+                : "Not connected"}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <StatusBadge variant={hasSlackConnected ? "connected" : "pending"}>
+              {hasSlackConnected ? "Connected" : "Disconnected"}
+            </StatusBadge>
+            {hasSlackConnected ? (
+              <button
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="rounded-[9px] border border-border px-3 py-1.5 text-xs font-medium text-muted2 transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
+              >
+                {disconnecting ? "..." : "Disconnect"}
+              </button>
+            ) : (
+              <a
+                href="/api/auth/slack"
+                className="rounded-[9px] bg-[#4A154B] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#3d1140]"
+              >
+                Connect Slack
+              </a>
+            )}
+          </div>
+        </div>
       )}
 
       <div className="flex items-center gap-2">
@@ -80,3 +106,4 @@ export function SettingsDestination({
     </div>
   );
 }
+

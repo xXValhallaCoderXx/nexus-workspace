@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   const channelToken = request.headers.get("x-goog-channel-token");
   const resourceId = request.headers.get("x-goog-resource-id");
   const resourceState = request.headers.get("x-goog-resource-state");
+  const messageNumber = request.headers.get("x-goog-message-number");
 
   console.log(
     JSON.stringify({
@@ -54,8 +55,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  // Deduplication
-  const changeToken = `${resourceId}:${resourceState}:${Date.now().toString(36)}`;
+  // Deduplication — use stable message number from Google (not timestamp)
+  const changeToken = `${resourceId}:${resourceState}:${messageNumber ?? "unknown"}`;
   if (await isDuplicate(resourceId, changeToken)) {
     console.log(
       JSON.stringify({ level: "info", event: "duplicate_webhook", channelId })

@@ -35,10 +35,11 @@ export async function processMeetingTranscript(
   }
 
   // Call LLM
+  const systemPrompt = config?.customSystemPrompt || MEETING_SUMMARY_SYSTEM_PROMPT;
   let response = await callOpenRouter({
     apiKey,
     model: DEFAULT_MODEL,
-    systemPrompt: MEETING_SUMMARY_SYSTEM_PROMPT,
+    systemPrompt,
     userContent: transcript.content,
     responseFormat: "json_object",
   });
@@ -53,7 +54,7 @@ export async function processMeetingTranscript(
       apiKey,
       model: DEFAULT_MODEL,
       systemPrompt:
-        MEETING_SUMMARY_SYSTEM_PROMPT +
+        systemPrompt +
         "\n\nIMPORTANT: Your previous response was invalid JSON. Output ONLY a valid JSON object matching the exact schema above.",
       userContent: transcript.content,
       responseFormat: "json_object",

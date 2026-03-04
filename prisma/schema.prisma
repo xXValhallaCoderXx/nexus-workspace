@@ -77,8 +77,10 @@ model UserConfig {
   userId                   String   @unique
   encryptedOpenRouterKey   String?  @db.Text
   encryptedSlackWebhookUrl String?  @db.Text
+  slackUserId              String?
   meetingSummariesEnabled  Boolean  @default(false)
   selectedDestination      String   @default("DATABASE")
+  customSystemPrompt       String?  @db.Text
   drivePageToken           String?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
