@@ -19,6 +19,33 @@ export function isLikelyTranscript(fileName: string, mimeType: string): boolean 
   return false;
 }
 
+export interface TranscriptListItem {
+  fileId: string;
+  fileName: string;
+  modifiedTime: string;
+}
+
+export async function listTranscriptFiles(
+  userId: string
+): Promise<TranscriptListItem[]> {
+  const drive = await getDriveClient(userId);
+
+  const res = await drive.files.list({
+    q: "mimeType='application/vnd.google-apps.document' and trashed=false",
+    fields: "files(id,name,mimeType,modifiedTime)",
+    orderBy: "modifiedTime desc",
+    pageSize: 100,
+  });
+
+  return (res.data.files ?? [])
+    .filter((f) => f.id && f.name && isLikelyTranscript(f.name, f.mimeType ?? ""))
+    .map((f) => ({
+      fileId: f.id!,
+      fileName: f.name!,
+      modifiedTime: f.modifiedTime ?? new Date().toISOString(),
+    }));
+}
+
 export async function fetchTranscriptContent(
   userId: string,
   fileId: string

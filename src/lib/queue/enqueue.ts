@@ -5,8 +5,8 @@ export const transcriptJobPayloadSchema = z.object({
   userId: z.string(),
   fileId: z.string(),
   fileName: z.string().optional(),
-  resourceId: z.string(),
-  channelId: z.string(),
+  resourceId: z.string().optional(),
+  channelId: z.string().optional(),
 });
 
 export type TranscriptJobPayload = z.infer<typeof transcriptJobPayloadSchema>;

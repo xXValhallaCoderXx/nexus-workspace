@@ -83,6 +83,18 @@ async function main() {
   }
   console.log(`Using user: ${user.name} (${user.email})`);
 
+  // Clean up any stale PROCESSING jobs from previous test runs
+  const stale = await prisma.jobHistory.deleteMany({
+    where: {
+      userId: user.id,
+      sourceFileId: "test-file-001",
+      status: "PROCESSING",
+    },
+  });
+  if (stale.count > 0) {
+    console.log(`Cleaned up ${stale.count} stale PROCESSING job(s) from previous runs`);
+  }
+
   // Create a pending job
   const job = await prisma.jobHistory.create({
     data: {

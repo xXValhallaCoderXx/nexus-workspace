@@ -19,14 +19,25 @@ export async function POST(request: Request) {
 
   const { userId, fileId, fileName } = parsed.data;
 
-  const job = await prisma.jobHistory.create({
-    data: {
-      userId,
-      sourceFileId: fileId,
-      sourceFileName: fileName,
-      status: "PROCESSING",
-    },
+  // Reuse a PENDING job (created by manual trigger) or create a new one (webhook flow)
+  const existingJob = await prisma.jobHistory.findFirst({
+    where: { userId, sourceFileId: fileId, status: "PENDING" },
+    orderBy: { createdAt: "desc" },
   });
+
+  const job = existingJob
+    ? await prisma.jobHistory.update({
+        where: { id: existingJob.id },
+        data: { status: "PROCESSING" },
+      })
+    : await prisma.jobHistory.create({
+        data: {
+          userId,
+          sourceFileId: fileId,
+          sourceFileName: fileName,
+          status: "PROCESSING",
+        },
+      });
 
   try {
     const result = await processMeetingTranscript(userId, fileId);

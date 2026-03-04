@@ -32,10 +32,17 @@ export async function getUserJobHistory(
     page?: number;
     limit?: number;
     status?: JobStatus;
+    search?: string;
   } = {}
 ) {
-  const { page = 1, limit = 20, status } = options;
-  const where = { userId, ...(status ? { status } : {}) };
+  const { page = 1, limit = 20, status, search } = options;
+  const where = {
+    userId,
+    ...(status ? { status } : {}),
+    ...(search
+      ? { sourceFileName: { contains: search, mode: "insensitive" as const } }
+      : {}),
+  };
 
   const [jobs, total] = await Promise.all([
     prisma.jobHistory.findMany({
@@ -48,6 +55,18 @@ export async function getUserJobHistory(
   ]);
 
   return { jobs, total, page, limit, totalPages: Math.ceil(total / limit) };
+}
+
+export async function getJobStatusByFileIds(
+  userId: string,
+  fileIds: string[]
+) {
+  if (fileIds.length === 0) return [];
+  return prisma.jobHistory.findMany({
+    where: { userId, sourceFileId: { in: fileIds } },
+    orderBy: { createdAt: "desc" },
+    select: { sourceFileId: true, status: true, id: true },
+  });
 }
 
 export async function getFailedJobsByUser(userId: string) {
@@ -78,4 +97,49 @@ export async function acknowledgeChannelRenewalError(
     where: { id, userId },
     data: { acknowledged: true },
   });
+}
+
+export async function getDashboardStats(userId: string) {
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  const [meetingsThisWeek, summariesReady, processing] = await Promise.all([
+    prisma.jobHistory.count({
+      where: { userId, createdAt: { gte: weekStart } },
+    }),
+    prisma.jobHistory.count({
+      where: { userId, status: "COMPLETED", createdAt: { gte: weekStart } },
+    }),
+    prisma.jobHistory.count({
+      where: { userId, status: "PROCESSING" },
+    }),
+  ]);
+
+  return { meetingsThisWeek, summariesReady, processing };
+}
+
+export async function getRecentMeetings(userId: string, limit = 5) {
+  return prisma.jobHistory.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
+export async function getProcessingJobCount(userId: string) {
+  return prisma.jobHistory.count({
+    where: { userId, status: "PROCESSING" },
+  });
+}
+
+export async function getJobStatusCounts(userId: string) {
+  const [total, completed, processing, failed] = await Promise.all([
+    prisma.jobHistory.count({ where: { userId } }),
+    prisma.jobHistory.count({ where: { userId, status: "COMPLETED" } }),
+    prisma.jobHistory.count({ where: { userId, status: "PROCESSING" } }),
+    prisma.jobHistory.count({ where: { userId, status: "FAILED" } }),
+  ]);
+  return { total, completed, processing, failed };
 }
