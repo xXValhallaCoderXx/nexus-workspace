@@ -5,6 +5,7 @@ import {
   getUserChannelRenewalErrors,
   getDashboardStats,
   getRecentMeetings,
+  getUserConnectorConfigs,
 } from "@/lib/db/scoped-queries";
 import { Topbar } from "@/components/layout/topbar";
 import { PageHeader } from "@/components/layout/page-header";
@@ -15,21 +16,31 @@ import { ConnectionsPanel } from "@/components/dashboard/connections-panel";
 import { WorkflowsPanel } from "@/components/dashboard/workflows-panel";
 import { HowItWorksBox } from "@/components/dashboard/how-it-works-box";
 
+import { ConnectorNudgeCard } from "@/components/dashboard/connector-nudge-card";
+
 export default async function DashboardPage() {
   const session = await getSession();
   const userId = session!.user.id;
 
-  const [config, channels, renewalErrors, stats, recentMeetings] =
+  const [config, channels, renewalErrors, stats, recentMeetings, connectorConfigs] =
     await Promise.all([
       getUserConfig(userId),
       getUserPushChannels(userId),
       getUserChannelRenewalErrors(userId),
       getDashboardStats(userId),
       getRecentMeetings(userId),
+      getUserConnectorConfigs(userId),
     ]);
 
   const activeChannel = channels.find((c) => c.expiration > new Date());
   const firstName = session!.user.name?.split(" ")[0] ?? "there";
+
+  const connectorStatusMap = Object.fromEntries(
+    connectorConfigs.map((c) => [
+      c.connectorId,
+      { status: c.status, enabled: c.enabled },
+    ])
+  );
 
   return (
     <>
@@ -97,6 +108,7 @@ export default async function DashboardPage() {
               status: m.status,
               createdAt: m.createdAt.toISOString(),
               resultPayload: m.resultPayload as Record<string, unknown> | null,
+              destinationDelivered: m.destinationDelivered,
             }))}
           />
 
@@ -106,11 +118,19 @@ export default async function DashboardPage() {
               channelActive={!!activeChannel}
               channelExpiration={activeChannel?.expiration.toISOString()}
               email={session!.user.email}
+              hasSlackConnected={!!config?.slackUserId}
+              connectorStatus={connectorStatusMap}
             />
             <WorkflowsPanel
               enabled={config?.meetingSummariesEnabled ?? false}
             />
             <HowItWorksBox />
+            <ConnectorNudgeCard
+              hasCrmConnected={!!connectorStatusMap["attio"]}
+              hasPmConnected={!!connectorStatusMap["clickup"]}
+              meetingCount={stats.summariesReady}
+              dismissed={config?.dismissedConnectorNudge ?? false}
+            />
           </div>
         </div>
 

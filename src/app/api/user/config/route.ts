@@ -10,6 +10,7 @@ const updateConfigSchema = z.object({
   slackWebhookUrl: z.string().url().optional(),
   openRouterApiKey: z.string().nullable().optional(),
   customSystemPrompt: z.string().nullable().optional(),
+  dismissedConnectorNudge: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -60,6 +61,9 @@ export async function PATCH(request: Request) {
   }
   if (parsed.data.customSystemPrompt !== undefined) {
     data.customSystemPrompt = parsed.data.customSystemPrompt;
+  }
+  if (parsed.data.dismissedConnectorNudge !== undefined) {
+    data.dismissedConnectorNudge = parsed.data.dismissedConnectorNudge;
   }
 
   await upsertUserConfig(session.user.id, data);

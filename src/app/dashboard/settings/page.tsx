@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth/get-session";
-import { getUserConfig, getUserPushChannels } from "@/lib/db/scoped-queries";
+import { getUserConfig, getUserPushChannels, getUserConnectorConfigs } from "@/lib/db/scoped-queries";
 import { Topbar } from "@/components/layout/topbar";
 import { PageHeader } from "@/components/layout/page-header";
 import { SettingsConnections } from "./settings-connections";
@@ -12,12 +12,25 @@ export default async function SettingsPage() {
   const session = await getSession();
   const userId = session!.user.id;
 
-  const [config, channels] = await Promise.all([
+  const [config, channels, connectorConfigs] = await Promise.all([
     getUserConfig(userId),
     getUserPushChannels(userId),
+    getUserConnectorConfigs(userId),
   ]);
 
   const activeChannel = channels.find((c) => c.expiration > new Date());
+
+  // Build connector status map for client components
+  const connectorStatusMap = Object.fromEntries(
+    connectorConfigs.map((c) => [
+      c.connectorId,
+      {
+        status: c.status,
+        enabled: c.enabled,
+        configJson: c.configJson as Record<string, unknown> | null,
+      },
+    ])
+  );
 
   return (
     <>
@@ -33,14 +46,19 @@ export default async function SettingsPage() {
             channelActive={!!activeChannel}
             channelExpiration={activeChannel?.expiration.toISOString()}
             email={session!.user.email}
+            hasSlackConnected={!!config?.slackUserId}
+            connectorStatus={connectorStatusMap}
           />
           <SettingsWorkflows
             enabled={config?.meetingSummariesEnabled ?? false}
             slackDmEnabled={config?.slackDmEnabled ?? false}
             hasSlackConnected={!!config?.slackUserId}
+            connectorStatus={connectorStatusMap}
           />
           <SettingsDestination
             hasSlackConnected={!!config?.slackUserId}
+            slackDmEnabled={config?.slackDmEnabled ?? false}
+            connectorStatus={connectorStatusMap}
           />
           <SettingsApiKey hasCustomKey={!!config?.encryptedOpenRouterKey} />
           <SettingsModelContext

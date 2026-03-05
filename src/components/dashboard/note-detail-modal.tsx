@@ -14,6 +14,15 @@ interface MeetingSummary {
   followUps: string[];
 }
 
+interface DeliveryLogEntry {
+  id: string;
+  connectorId: string;
+  status: string;
+  errorMessage: string | null;
+  deliveredAt: string | null;
+  retryCount: number;
+}
+
 interface JobResponse {
   id: string;
   sourceFileId: string;
@@ -23,6 +32,8 @@ interface JobResponse {
   errorMessage: string | null;
   createdAt: string;
   completedAt: string | null;
+  destinationDelivered?: string | null;
+  deliveryLogs?: DeliveryLogEntry[];
 }
 
 export function NoteDetailModal({
@@ -99,7 +110,10 @@ export function NoteDetailModal({
       ) : error ? (
         <div className="py-12 text-center text-sm text-red">{error}</div>
       ) : payload ? (
-        <SummaryView payload={payload} />
+        <div className="space-y-4">
+          <SummaryView payload={payload} />
+          {job && <DeliverySection job={job} />}
+        </div>
       ) : job?.status === "FAILED" ? (
         <div className="py-12 text-center">
           <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red/10">
@@ -219,6 +233,127 @@ function SummaryView({ payload }: { payload: MeetingSummary }) {
               <li key={i}>{f}</li>
             ))}
           </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const connectorLabels: Record<string, string> = {
+  DATABASE: "Nexus History",
+  SLACK: "Slack",
+  attio: "Attio CRM",
+  clickup: "ClickUp",
+};
+
+function DeliverySection({ job }: { job: JobResponse }) {
+  const [open, setOpen] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  // Build delivery items from both legacy field and delivery_log
+  const items: Array<{
+    id: string;
+    connector: string;
+    label: string;
+    status: "delivered" | "failed" | "pending";
+    time: string | null;
+    error: string | null;
+  }> = [];
+
+  if (job.deliveryLogs && job.deliveryLogs.length > 0) {
+    for (const dl of job.deliveryLogs) {
+      items.push({
+        id: dl.id,
+        connector: dl.connectorId,
+        label: connectorLabels[dl.connectorId] ?? dl.connectorId,
+        status: dl.status === "DELIVERED" ? "delivered" : dl.status === "FAILED" ? "failed" : "pending",
+        time: dl.deliveredAt,
+        error: dl.errorMessage,
+      });
+    }
+  } else if (job.destinationDelivered) {
+    // Fallback to legacy comma string
+    const parts = job.destinationDelivered.split(",").map((d) => d.trim()).filter(Boolean);
+    for (const p of parts) {
+      items.push({
+        id: p,
+        connector: p,
+        label: connectorLabels[p] ?? p,
+        status: "delivered",
+        time: job.completedAt,
+        error: null,
+      });
+    }
+  }
+
+  if (items.length === 0) return null;
+
+  async function handleRetry(logId: string, connectorId: string) {
+    setRetryingId(logId);
+    try {
+      await fetch(`/api/user/delivery/${encodeURIComponent(logId)}/retry`, {
+        method: "POST",
+      });
+      window.location.reload();
+    } finally {
+      setRetryingId(null);
+    }
+  }
+
+  return (
+    <div className="border-t border-border pt-3">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-1 text-left text-xs font-bold uppercase tracking-wider text-muted2 hover:text-text transition-colors"
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className={`transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        Delivered to ({items.length})
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1.5">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between rounded-lg border border-border bg-bg px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${
+                    item.status === "delivered"
+                      ? "bg-green"
+                      : item.status === "failed"
+                        ? "bg-red"
+                        : "bg-amber"
+                  }`}
+                />
+                <span className="text-[13px] text-text">{item.label}</span>
+                {item.time && (
+                  <span className="text-[10px] text-muted2">
+                    {new Date(item.time).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              {item.status === "failed" && (
+                <button
+                  onClick={() => handleRetry(item.id, item.connector)}
+                  disabled={retryingId === item.id}
+                  className="text-[11px] font-semibold text-brand hover:underline disabled:opacity-50"
+                >
+                  {retryingId === item.id ? "Retrying…" : "Retry"}
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

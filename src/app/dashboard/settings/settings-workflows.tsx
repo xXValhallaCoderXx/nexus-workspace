@@ -3,18 +3,30 @@
 import { useState } from "react";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
+type ConnectorStatusMap = Record<
+  string,
+  { status: string; enabled: boolean; configJson: Record<string, unknown> | null }
+>;
+
 export function SettingsWorkflows({
   enabled,
   slackDmEnabled,
   hasSlackConnected,
+  connectorStatus,
 }: {
   enabled: boolean;
   slackDmEnabled: boolean;
   hasSlackConnected: boolean;
+  connectorStatus: ConnectorStatusMap;
 }) {
   const [isEnabled, setIsEnabled] = useState(enabled);
   const [isSlackDm, setIsSlackDm] = useState(slackDmEnabled);
   const [loadingField, setLoadingField] = useState<string | null>(null);
+
+  const attio = connectorStatus["attio"];
+  const clickup = connectorStatus["clickup"];
+  const attioReady = attio?.status === "CONNECTED" && attio?.enabled && !!attio?.configJson;
+  const clickupReady = clickup?.status === "CONNECTED" && clickup?.enabled && !!clickup?.configJson;
 
   async function handleToggle(field: "meetingSummariesEnabled" | "slackDmEnabled") {
     const isAutoSummarise = field === "meetingSummariesEnabled";
@@ -49,7 +61,7 @@ export function SettingsWorkflows({
         <div>
           <div className="text-[13px] font-medium text-text">Meeting Summaries</div>
           <div className="mt-[2px] text-[11px] text-muted2">
-            Auto-process new transcripts
+            Process new transcripts automatically
           </div>
         </div>
         <ToggleSwitch
@@ -65,7 +77,7 @@ export function SettingsWorkflows({
           <div>
             <div className="text-[13px] font-medium text-text">Slack DM on ready</div>
             <div className="mt-[2px] text-[11px] text-muted2">
-              Send summary via Slack when processing completes
+              Notify via Slack when a summary is complete
             </div>
           </div>
           <ToggleSwitch
@@ -75,6 +87,42 @@ export function SettingsWorkflows({
           />
         </div>
       )}
+
+      {/* Attio note toggle — only visible when Attio is connected + configured + enabled */}
+      {attioReady && (
+        <div className="flex items-center justify-between border-t border-border py-[11px]">
+          <div>
+            <div className="text-[13px] font-medium text-text">Attio note on ready</div>
+            <div className="mt-[2px] text-[11px] text-muted2">
+              Create Attio note when a summary is complete
+            </div>
+          </div>
+          <StatusLabel active />
+        </div>
+      )}
+
+      {/* ClickUp doc toggle — only visible when ClickUp is connected + configured + enabled */}
+      {clickupReady && (
+        <div className="flex items-center justify-between border-t border-border py-[11px]">
+          <div>
+            <div className="text-[13px] font-medium text-text">ClickUp doc on ready</div>
+            <div className="mt-[2px] text-[11px] text-muted2">
+              Create ClickUp doc when a summary is complete
+            </div>
+          </div>
+          <StatusLabel active />
+        </div>
+      )}
     </div>
+  );
+}
+
+function StatusLabel({ active }: { active: boolean }) {
+  return (
+    <span
+      className={`text-[11px] font-semibold ${active ? "text-green" : "text-muted2"}`}
+    >
+      {active ? "Active" : "Inactive"}
+    </span>
   );
 }

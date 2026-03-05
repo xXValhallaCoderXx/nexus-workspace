@@ -5,6 +5,7 @@ const variants = {
   active: "text-[#2563EB] bg-[#EFF6FF] border-[#BFDBFE]",
   failed: "text-red bg-red-lt border-[#FECACA]",
   pending: "text-muted bg-bg border-border",
+  expired: "text-amber bg-amber-lt border-[#FDE68A]",
 } as const;
 
 type Variant = keyof typeof variants;

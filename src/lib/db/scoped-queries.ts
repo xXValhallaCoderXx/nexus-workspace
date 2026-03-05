@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { Prisma } from "@/generated/prisma/client";
 import type { JobStatus } from "@/generated/prisma/enums";
 
 export async function getUserConfig(userId: string) {
@@ -15,12 +16,125 @@ export async function upsertUserConfig(
     slackUserId?: string | null;
     customSystemPrompt?: string | null;
     drivePageToken?: string | null;
+    dismissedConnectorNudge?: boolean;
   }
 ) {
   return prisma.userConfig.upsert({
     where: { userId },
     create: { userId, ...data },
     update: data,
+  });
+}
+
+// ── Connector Config ────────────────────────
+
+export async function getUserConnectorConfigs(userId: string) {
+  return prisma.userConnectorConfig.findMany({ where: { userId } });
+}
+
+export async function getUserConnectorConfig(
+  userId: string,
+  connectorId: string
+) {
+  return prisma.userConnectorConfig.findUnique({
+    where: { userId_connectorId: { userId, connectorId } },
+  });
+}
+
+export async function upsertConnectorConfig(
+  userId: string,
+  connectorId: string,
+  data: {
+    enabled?: boolean;
+    configJson?: Record<string, unknown> | null;
+    oauthTokens?: string | null;
+    status?: "CONNECTED" | "DISCONNECTED" | "EXPIRED";
+  }
+) {
+  const configJson =
+    data.configJson === null
+      ? Prisma.JsonNull
+      : data.configJson === undefined
+        ? undefined
+        : (data.configJson as Prisma.InputJsonValue);
+
+  const prismaData = {
+    ...data,
+    configJson,
+  };
+
+  return prisma.userConnectorConfig.upsert({
+    where: { userId_connectorId: { userId, connectorId } },
+    create: { userId, connectorId, ...prismaData },
+    update: prismaData,
+  });
+}
+
+export async function deleteConnectorConfig(
+  userId: string,
+  connectorId: string
+) {
+  return prisma.userConnectorConfig.deleteMany({
+    where: { userId, connectorId },
+  });
+}
+
+export async function getEnabledConnectorConfigs(userId: string) {
+  return prisma.userConnectorConfig.findMany({
+    where: { userId, enabled: true, status: "CONNECTED" },
+  });
+}
+
+// ── Delivery Log ────────────────────────────
+
+export async function createDeliveryLog(data: {
+  summaryId: string;
+  connectorId: string;
+  status?: "PENDING" | "DELIVERED" | "FAILED";
+  errorMessage?: string;
+  deliveredAt?: Date;
+}) {
+  return prisma.deliveryLog.create({
+    data: {
+      summaryId: data.summaryId,
+      connectorId: data.connectorId,
+      status: data.status ?? "PENDING",
+      errorMessage: data.errorMessage,
+      deliveredAt: data.deliveredAt,
+    },
+  });
+}
+
+export async function updateDeliveryLog(
+  id: string,
+  data: {
+    status?: "PENDING" | "DELIVERED" | "FAILED";
+    errorMessage?: string | null;
+    deliveredAt?: Date;
+    retryCount?: { increment: number };
+  }
+) {
+  return prisma.deliveryLog.update({
+    where: { id },
+    data: {
+      status: data.status,
+      errorMessage: data.errorMessage,
+      deliveredAt: data.deliveredAt,
+      ...(data.retryCount ? { retryCount: data.retryCount } : {}),
+    },
+  });
+}
+
+export async function getDeliveryLogsForSummary(summaryId: string) {
+  return prisma.deliveryLog.findMany({
+    where: { summaryId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function getFailedDeliveryLogs(summaryId: string) {
+  return prisma.deliveryLog.findMany({
+    where: { summaryId, status: "FAILED" },
   });
 }
 
@@ -139,6 +253,7 @@ export async function getProcessingJobCount(userId: string) {
 export async function getJobById(jobId: string, userId: string) {
   return prisma.jobHistory.findFirst({
     where: { id: jobId, userId },
+    include: { deliveryLogs: true },
   });
 }
 
