@@ -1,0 +1,1 @@
+Refer to docs/ai-context/overview.md for project context
