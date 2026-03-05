@@ -43,6 +43,7 @@ export default async function HistoryPage({
         <HistoryTable
           jobs={result.jobs.map((j) => ({
             ...j,
+            sourceFileId: j.sourceFileId,
             createdAt: j.createdAt.toISOString(),
             completedAt: j.completedAt?.toISOString() ?? null,
             resultPayload: j.resultPayload as Record<string, unknown> | null,

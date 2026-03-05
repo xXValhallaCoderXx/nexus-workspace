@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
+import { cleanMeetingTitle } from "@/lib/utils/clean-meeting-title";
 
 interface MeetingSummary {
   title: string;
@@ -15,9 +16,11 @@ interface MeetingSummary {
 
 interface JobResponse {
   id: string;
+  sourceFileId: string;
   sourceFileName: string | null;
   status: string;
   resultPayload: MeetingSummary | null;
+  errorMessage: string | null;
   createdAt: string;
   completedAt: string | null;
 }
@@ -33,6 +36,25 @@ export function NoteDetailModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetchedId, setFetchedId] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  async function handleRetry() {
+    if (!job) return;
+    setRetrying(true);
+    try {
+      const res = await fetch("/api/user/drive/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: job.sourceFileId, fileName: job.sourceFileName }),
+      });
+      if (res.ok) {
+        onClose();
+        window.location.reload();
+      }
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   // Reset state when jobId changes to null (modal closed)
   if (!jobId && fetchedId) {
@@ -68,7 +90,7 @@ export function NoteDetailModal({
     <Modal
       open={!!jobId}
       onClose={onClose}
-      title={payload?.title ?? job?.sourceFileName ?? "Meeting Note"}
+      title={payload?.title ?? cleanMeetingTitle(job?.sourceFileName)}
     >
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -78,6 +100,25 @@ export function NoteDetailModal({
         <div className="py-12 text-center text-sm text-red">{error}</div>
       ) : payload ? (
         <SummaryView payload={payload} />
+      ) : job?.status === "FAILED" ? (
+        <div className="py-12 text-center">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red/10">
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="var(--red)" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-text">Processing failed</p>
+          {job.errorMessage && (
+            <p className="mt-1 text-xs text-muted2">{job.errorMessage}</p>
+          )}
+          <button
+            onClick={handleRetry}
+            disabled={retrying}
+            className="mt-4 rounded-lg bg-brand px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {retrying ? "Retrying..." : "Retry Processing"}
+          </button>
+        </div>
       ) : (
         <div className="py-12 text-center text-sm text-muted2">
           No summary available

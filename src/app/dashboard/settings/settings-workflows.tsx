@@ -3,24 +3,37 @@
 import { useState } from "react";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
-export function SettingsWorkflows({ enabled }: { enabled: boolean }) {
+export function SettingsWorkflows({
+  enabled,
+  slackDmEnabled,
+  hasSlackConnected,
+}: {
+  enabled: boolean;
+  slackDmEnabled: boolean;
+  hasSlackConnected: boolean;
+}) {
   const [isEnabled, setIsEnabled] = useState(enabled);
-  const [loading, setLoading] = useState(false);
+  const [isSlackDm, setIsSlackDm] = useState(slackDmEnabled);
+  const [loadingField, setLoadingField] = useState<string | null>(null);
 
-  async function handleToggle() {
-    setLoading(true);
-    const newValue = !isEnabled;
+  async function handleToggle(field: "meetingSummariesEnabled" | "slackDmEnabled") {
+    const isAutoSummarise = field === "meetingSummariesEnabled";
+    const currentValue = isAutoSummarise ? isEnabled : isSlackDm;
+    const newValue = !currentValue;
+
+    setLoadingField(field);
     try {
       const res = await fetch("/api/user/config", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meetingSummariesEnabled: newValue }),
+        body: JSON.stringify({ [field]: newValue }),
       });
       if (res.ok) {
-        setIsEnabled(newValue);
+        if (isAutoSummarise) setIsEnabled(newValue);
+        else setIsSlackDm(newValue);
       }
     } finally {
-      setLoading(false);
+      setLoadingField(null);
     }
   }
 
@@ -30,6 +43,8 @@ export function SettingsWorkflows({ enabled }: { enabled: boolean }) {
       <div className="mb-[18px] text-xs text-muted2">
         Automate your meeting processing
       </div>
+
+      {/* Auto-summarise toggle */}
       <div className="flex items-center justify-between py-[11px]">
         <div>
           <div className="text-[13px] font-medium text-text">Meeting Summaries</div>
@@ -39,10 +54,27 @@ export function SettingsWorkflows({ enabled }: { enabled: boolean }) {
         </div>
         <ToggleSwitch
           enabled={isEnabled}
-          onToggle={handleToggle}
-          disabled={loading}
+          onToggle={() => handleToggle("meetingSummariesEnabled")}
+          disabled={loadingField !== null}
         />
       </div>
+
+      {/* Slack DM toggle — only visible when Slack is connected */}
+      {hasSlackConnected && (
+        <div className="flex items-center justify-between border-t border-border py-[11px]">
+          <div>
+            <div className="text-[13px] font-medium text-text">Slack DM on ready</div>
+            <div className="mt-[2px] text-[11px] text-muted2">
+              Send summary via Slack when processing completes
+            </div>
+          </div>
+          <ToggleSwitch
+            enabled={isSlackDm}
+            onToggle={() => handleToggle("slackDmEnabled")}
+            disabled={loadingField !== null}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ export async function upsertUserConfig(
   userId: string,
   data: {
     meetingSummariesEnabled?: boolean;
-    selectedDestination?: string;
+    slackDmEnabled?: boolean;
     encryptedOpenRouterKey?: string | null;
     encryptedSlackWebhookUrl?: string | null;
     slackUserId?: string | null;

@@ -16,3 +16,17 @@ export function getDestinationProvider(
   }
   return factory();
 }
+
+/**
+ * Returns the list of destinations to deliver to based on user config.
+ * DATABASE is always included. SLACK is added when slackDmEnabled is true.
+ */
+export function getEnabledDestinations(config: {
+  slackDmEnabled?: boolean;
+} | null): string[] {
+  const destinations = ["DATABASE"];
+  if (config?.slackDmEnabled) {
+    destinations.push("SLACK");
+  }
+  return destinations;
+}

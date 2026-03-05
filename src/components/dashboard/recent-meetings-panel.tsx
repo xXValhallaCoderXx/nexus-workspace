@@ -6,6 +6,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { NoteDetailModal } from "@/components/dashboard/note-detail-modal";
 import { useNoteModal } from "@/hooks/use-note-modal";
+import { cleanMeetingTitle } from "@/lib/utils/clean-meeting-title";
 
 interface Meeting {
   id: string;
@@ -50,9 +51,21 @@ function RecentMeetingsPanelInner({ meetings }: { meetings: Meeting[] }) {
       />
       <div className="py-1.5">
         {meetings.length === 0 && (
-          <p className="px-5 py-8 text-center text-xs text-muted2">
-            No meetings processed yet
-          </p>
+          <div className="px-5 py-10 text-center">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-lt">
+              <MicIcon color="var(--brand)" />
+            </div>
+            <p className="text-sm font-medium text-text">No meetings yet</p>
+            <p className="mt-1 text-xs text-muted2">
+              Your meeting summaries will appear here once a transcript is processed.
+            </p>
+            <Link
+              href="/dashboard/notes"
+              className="mt-3 inline-block text-xs font-semibold text-brand hover:underline"
+            >
+              Browse transcripts &rarr;
+            </Link>
+          </div>
         )}
         {meetings.map((m) => {
           const isProcessing = m.status === "PROCESSING";
@@ -76,7 +89,7 @@ function RecentMeetingsPanelInner({ meetings }: { meetings: Meeting[] }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-[13px] font-semibold text-text">
-                    {m.sourceFileName ?? "Untitled Meeting"}
+                    {cleanMeetingTitle(m.sourceFileName)}
                   </span>
                   <StatusBadge
                     variant={

@@ -7,6 +7,7 @@ import { FilterChip } from "@/components/ui/filter-chip";
 import { SearchInput } from "@/components/ui/search-input";
 import { NoteDetailModal } from "@/components/dashboard/note-detail-modal";
 import { useNoteModal } from "@/hooks/use-note-modal";
+import { cleanMeetingTitle } from "@/lib/utils/clean-meeting-title";
 
 interface DriveFile {
   fileId: string;
@@ -171,10 +172,20 @@ function DriveFilesPanelInner() {
       ) : error ? (
         <div className="px-5 py-10 text-center text-xs text-red">{error}</div>
       ) : filteredFiles.length === 0 ? (
-        <div className="px-5 py-10 text-center text-xs text-muted2">
-          {files.length === 0
-            ? "No transcript files found in your Google Drive"
-            : "No files match your filters"}
+        <div className="px-5 py-10 text-center">
+          {files.length === 0 ? (
+            <>
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-lt">
+                <MicIcon />
+              </div>
+              <p className="text-sm font-medium text-text">No transcripts found</p>
+              <p className="mt-1 text-xs text-muted2">
+                Google Meet transcripts will appear here after your meetings. Make sure &quot;Notes by Gemini&quot; is enabled in Google Meet.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-muted2">No files match your filters</p>
+          )}
         </div>
       ) : (
         <div className="py-1.5">
@@ -194,7 +205,7 @@ function DriveFilesPanelInner() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13px] font-semibold text-text">
-                    {f.fileName}
+                    {cleanMeetingTitle(f.fileName)}
                   </div>
                   <div className="mt-[3px] text-[11px] text-muted2">
                     {formatDate(f.modifiedTime)}

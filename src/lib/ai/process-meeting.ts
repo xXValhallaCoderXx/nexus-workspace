@@ -7,14 +7,14 @@ import {
 import { fetchTranscriptContent } from "@/lib/google/fetch-transcript";
 import { getUserConfig } from "@/lib/db/scoped-queries";
 import { decrypt } from "@/lib/crypto/encryption";
-import { getDestinationProvider } from "@/lib/destinations/router";
+import { getDestinationProvider, getEnabledDestinations } from "@/lib/destinations/router";
 
 const DEFAULT_MODEL = "google/gemini-2.0-flash-001";
 
 export interface ProcessingResult {
   payload: MeetingSummaryOutput;
   model: string;
-  destination: string;
+  destinations: string[];
 }
 
 export async function processMeetingTranscript(
@@ -62,14 +62,31 @@ export async function processMeetingTranscript(
     parsed = meetingSummarySchema.parse(JSON.parse(response.content));
   }
 
-  // Deliver to destination
-  const destinationType = config?.selectedDestination ?? "DATABASE";
-  const provider = getDestinationProvider(destinationType);
-  await provider.deliver(parsed, userId);
+  // Deliver to all enabled destinations
+  const enabledDestinations = getEnabledDestinations(config);
+  const deliveredTo: string[] = [];
+
+  for (const dest of enabledDestinations) {
+    const provider = getDestinationProvider(dest);
+    const result = await provider.deliver(parsed, userId);
+    if (result.success) {
+      deliveredTo.push(dest);
+    } else {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "destination_delivery_failed",
+          userId,
+          destination: dest,
+          error: result.error,
+        })
+      );
+    }
+  }
 
   return {
     payload: parsed,
     model: response.model,
-    destination: destinationType,
+    destinations: deliveredTo.length > 0 ? deliveredTo : ["DATABASE"],
   };
 }

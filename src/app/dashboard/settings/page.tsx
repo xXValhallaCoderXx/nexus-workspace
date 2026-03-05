@@ -36,9 +36,10 @@ export default async function SettingsPage() {
           />
           <SettingsWorkflows
             enabled={config?.meetingSummariesEnabled ?? false}
+            slackDmEnabled={config?.slackDmEnabled ?? false}
+            hasSlackConnected={!!config?.slackUserId}
           />
           <SettingsDestination
-            selectedDestination={config?.selectedDestination ?? "DATABASE"}
             hasSlackConnected={!!config?.slackUserId}
           />
           <SettingsApiKey hasCustomKey={!!config?.encryptedOpenRouterKey} />

@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         status: "COMPLETED",
         resultPayload: result.payload,
         llmModel: result.model,
-        destinationDelivered: result.destination,
+        destinationDelivered: result.destinations.join(", "),
         completedAt: new Date(),
       },
     });

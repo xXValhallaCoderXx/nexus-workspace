@@ -6,7 +6,7 @@ import { encrypt } from "@/lib/crypto/encryption";
 
 const updateConfigSchema = z.object({
   meetingSummariesEnabled: z.boolean().optional(),
-  selectedDestination: z.enum(["DATABASE", "SLACK"]).optional(),
+  slackDmEnabled: z.boolean().optional(),
   slackWebhookUrl: z.string().url().optional(),
   openRouterApiKey: z.string().nullable().optional(),
   customSystemPrompt: z.string().nullable().optional(),
@@ -22,7 +22,7 @@ export async function GET() {
 
   return NextResponse.json({
     meetingSummariesEnabled: config?.meetingSummariesEnabled ?? false,
-    selectedDestination: config?.selectedDestination ?? "DATABASE",
+    slackDmEnabled: config?.slackDmEnabled ?? false,
     hasOpenRouterKey: !!config?.encryptedOpenRouterKey,
     hasSlackWebhook: !!config?.encryptedSlackWebhookUrl,
     hasSlackConnected: !!config?.slackUserId,
@@ -47,8 +47,8 @@ export async function PATCH(request: Request) {
   if (parsed.data.meetingSummariesEnabled !== undefined) {
     data.meetingSummariesEnabled = parsed.data.meetingSummariesEnabled;
   }
-  if (parsed.data.selectedDestination !== undefined) {
-    data.selectedDestination = parsed.data.selectedDestination;
+  if (parsed.data.slackDmEnabled !== undefined) {
+    data.slackDmEnabled = parsed.data.slackDmEnabled;
   }
   if (parsed.data.slackWebhookUrl !== undefined) {
     data.encryptedSlackWebhookUrl = encrypt(parsed.data.slackWebhookUrl);

@@ -1,14 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { NoteDetailModal } from "@/components/dashboard/note-detail-modal";
 import { useNoteModal } from "@/hooks/use-note-modal";
+import { cleanMeetingTitle } from "@/lib/utils/clean-meeting-title";
 
 interface Job {
   id: string;
+  sourceFileId: string;
   sourceFileName: string | null;
   status: string;
   destinationDelivered: string | null;
@@ -45,13 +48,40 @@ function HistoryTableInner({
   totalPages: number;
 }) {
   const { activeNoteId, openNote, closeNote } = useNoteModal();
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  async function handleRetry(job: Job) {
+    setRetryingId(job.id);
+    try {
+      const res = await fetch("/api/user/drive/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: job.sourceFileId, fileName: job.sourceFileName }),
+      });
+      if (res.ok) window.location.reload();
+    } finally {
+      setRetryingId(null);
+    }
+  }
 
   if (jobs.length === 0) {
     return (
       <Card className="px-5 py-12 text-center">
-        <p className="text-sm text-muted2">
-          No meetings found. Processed transcripts will appear here.
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-lt">
+          <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="1.8">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p className="text-sm font-medium text-text">No meetings found</p>
+        <p className="mt-1 text-xs text-muted2">
+          Processed transcripts will appear here. Head to Notes to process your first transcript.
         </p>
+        <Link
+          href="/dashboard/notes"
+          className="mt-3 inline-block text-xs font-semibold text-brand hover:underline"
+        >
+          Browse transcripts &rarr;
+        </Link>
       </Card>
     );
   }
@@ -89,8 +119,15 @@ function HistoryTableInner({
                 >
                   <td className="border-b border-border px-4 py-3 text-[13px]">
                     <div className="font-semibold text-text">
-                      {job.sourceFileName ?? "Untitled"}
+                      {cleanMeetingTitle(job.sourceFileName)}
                     </div>
+                    {job.status === "FAILED" && job.errorMessage && (
+                      <div className="mt-0.5 text-[11px] text-red">
+                        {job.errorMessage.length > 80
+                          ? job.errorMessage.slice(0, 80) + "..."
+                          : job.errorMessage}
+                      </div>
+                    )}
                   </td>
                   <td className="border-b border-border px-4 py-3 text-[13px] text-muted2">
                     {formatDate(job.createdAt)}
@@ -99,7 +136,21 @@ function HistoryTableInner({
                     {job.destinationDelivered ?? "—"}
                   </td>
                   <td className="border-b border-border px-4 py-3">
-                    <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
+                      {job.status === "FAILED" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRetry(job);
+                          }}
+                          disabled={retryingId !== null}
+                          className="rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                        >
+                          {retryingId === job.id ? "Retrying..." : "Retry"}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
