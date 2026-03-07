@@ -67,8 +67,19 @@ export async function GET(request: Request) {
     );
   }
 
-  const slackUserId: string =
-    tokenData["https://slack.com/user_id"] ?? tokenData.sub;
+  // User ID is inside the id_token JWT — decode the payload
+  let slackUserId: string | undefined;
+  if (tokenData.id_token) {
+    try {
+      const [, payloadB64] = tokenData.id_token.split(".");
+      const claims = JSON.parse(
+        Buffer.from(payloadB64, "base64url").toString()
+      );
+      slackUserId = claims["https://slack.com/user_id"] ?? claims.sub;
+    } catch {
+      // fall through to error
+    }
+  }
 
   if (!slackUserId) {
     return NextResponse.redirect(
