@@ -1,5 +1,9 @@
 import { getSession } from "@/lib/auth/get-session";
-import { getUserConfig, getUserPushChannels, getUserConnectorConfigs } from "@/lib/db/scoped-queries";
+import {
+  getUserConfig,
+  getUserPushChannels,
+  getDestinationConnections,
+} from "@/lib/db/scoped-queries";
 import { Topbar } from "@/components/layout/topbar";
 import { PageHeader } from "@/components/layout/page-header";
 import { SettingsConnections } from "./settings-connections";
@@ -12,18 +16,18 @@ export default async function SettingsPage() {
   const session = await getSession();
   const userId = session!.user.id;
 
-  const [config, channels, connectorConfigs] = await Promise.all([
+  const [config, channels, destConnections] = await Promise.all([
     getUserConfig(userId),
     getUserPushChannels(userId),
-    getUserConnectorConfigs(userId),
+    getDestinationConnections(userId),
   ]);
 
   const activeChannel = channels.find((c) => c.expiration > new Date());
 
-  // Build connector status map for client components
+  // Build destination connection status map for client components
   const connectorStatusMap = Object.fromEntries(
-    connectorConfigs.map((c) => [
-      c.connectorId,
+    destConnections.map((c) => [
+      c.provider.toLowerCase(),
       {
         status: c.status,
         enabled: c.enabled,
@@ -31,6 +35,10 @@ export default async function SettingsPage() {
       },
     ])
   );
+
+  const slackConn = destConnections.find((c) => c.provider === "SLACK");
+  const hasSlackConnected = slackConn?.status === "CONNECTED";
+  const slackDmEnabled = slackConn?.enabled ?? false;
 
   return (
     <>
@@ -46,18 +54,18 @@ export default async function SettingsPage() {
             channelActive={!!activeChannel}
             channelExpiration={activeChannel?.expiration.toISOString()}
             email={session!.user.email}
-            hasSlackConnected={!!config?.slackUserId}
+            hasSlackConnected={hasSlackConnected}
             connectorStatus={connectorStatusMap}
           />
           <SettingsWorkflows
             enabled={config?.meetingSummariesEnabled ?? false}
-            slackDmEnabled={config?.slackDmEnabled ?? false}
-            hasSlackConnected={!!config?.slackUserId}
+            slackDmEnabled={slackDmEnabled}
+            hasSlackConnected={hasSlackConnected}
             connectorStatus={connectorStatusMap}
           />
           <SettingsDestination
-            hasSlackConnected={!!config?.slackUserId}
-            slackDmEnabled={config?.slackDmEnabled ?? false}
+            hasSlackConnected={hasSlackConnected}
+            slackDmEnabled={slackDmEnabled}
             connectorStatus={connectorStatusMap}
           />
           <SettingsApiKey hasCustomKey={!!config?.encryptedOpenRouterKey} />

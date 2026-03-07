@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { connectorFetch } from "@/lib/connectors/connector-auth";
+import { destinationFetch } from "@/lib/db/scoped-queries";
 
 export async function GET() {
   const session = await getSession();
@@ -9,9 +9,9 @@ export async function GET() {
   }
 
   try {
-    const res = await connectorFetch(
+    const res = await destinationFetch(
       session.user.id,
-      "clickup",
+      "CLICKUP",
       "https://api.clickup.com/api/v2/team"
     );
 

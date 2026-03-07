@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
 import { enqueueTranscriptJob } from "@/lib/queue/enqueue";
-import { prisma } from "@/lib/db/prisma";
+import {
+  createWorkflowRun,
+  findPendingWorkflowRun,
+} from "@/lib/db/scoped-queries";
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -16,14 +19,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "fileId is required" }, { status: 400 });
   }
 
-  // Check for in-flight job
-  const existing = await prisma.jobHistory.findFirst({
-    where: {
-      userId: session.user.id,
-      sourceFileId: fileId,
-      status: { in: ["PENDING", "PROCESSING"] },
-    },
-  });
+  // Check for in-flight run
+  const existing = await findPendingWorkflowRun(session.user.id, fileId);
 
   if (existing) {
     return NextResponse.json(
@@ -32,13 +29,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const job = await prisma.jobHistory.create({
-    data: {
-      userId: session.user.id,
-      sourceFileId: fileId,
-      sourceFileName: fileName ?? null,
-      status: "PENDING",
-    },
+  const run = await createWorkflowRun({
+    userId: session.user.id,
+    workflowType: "MEETING_SUMMARY",
+    triggerType: "MANUAL",
+    inputRefJson: { fileId, fileName },
+    status: "PENDING",
   });
 
   await enqueueTranscriptJob({
@@ -47,5 +43,5 @@ export async function POST(request: NextRequest) {
     fileName: fileName ?? undefined,
   });
 
-  return NextResponse.json({ queued: true, jobId: job.id });
+  return NextResponse.json({ queued: true, runId: run.id });
 }

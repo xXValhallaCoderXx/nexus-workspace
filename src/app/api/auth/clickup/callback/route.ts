@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { upsertConnectorConfig } from "@/lib/db/scoped-queries";
+import { upsertDestinationConnection } from "@/lib/db/scoped-queries";
 import { encrypt } from "@/lib/crypto/encryption";
 import { cookies } from "next/headers";
 
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     );
   }
 
-  // Exchange code for token — ClickUp uses query params for token exchange
+  // Exchange code for token
   const tokenParams = new URLSearchParams({
     client_id: process.env.CLICKUP_CLIENT_ID!,
     client_secret: process.env.CLICKUP_CLIENT_SECRET!,
@@ -66,16 +66,14 @@ export async function GET(request: Request) {
     );
   }
 
-  // ClickUp tokens don't expire but can be revoked
   const encryptedTokens = encrypt(
-    JSON.stringify({
-      access_token: tokenData.access_token,
-    })
+    JSON.stringify({ access_token: tokenData.access_token })
   );
 
-  await upsertConnectorConfig(session.user.id, "clickup", {
-    oauthTokens: encryptedTokens,
+  await upsertDestinationConnection(session.user.id, "CLICKUP", {
+    oauthTokensEncrypted: encryptedTokens,
     status: "CONNECTED",
+    displayName: "ClickUp",
   });
 
   const response = NextResponse.redirect(

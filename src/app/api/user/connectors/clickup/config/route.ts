@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { upsertConnectorConfig } from "@/lib/db/scoped-queries";
+import { upsertDestinationConnection } from "@/lib/db/scoped-queries";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -9,7 +9,15 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { workspace_id, workspace_name, space_id, space_name, folder_id, folder_name } = body;
+  const {
+    workspace_id,
+    workspace_name,
+    space_id,
+    space_name,
+    folder_id,
+    folder_name,
+    enabled,
+  } = body;
 
   if (!workspace_id || !space_id) {
     return NextResponse.json(
@@ -18,7 +26,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await upsertConnectorConfig(session.user.id, "clickup", {
+  await upsertDestinationConnection(session.user.id, "CLICKUP", {
     configJson: {
       workspace_id,
       workspace_name: workspace_name ?? null,
@@ -27,7 +35,7 @@ export async function POST(request: Request) {
       folder_id: folder_id ?? null,
       folder_name: folder_name ?? null,
     },
-    enabled: true,
+    enabled: enabled ?? true,
   });
 
   return NextResponse.json({ success: true });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { getJobById } from "@/lib/db/scoped-queries";
+import { getWorkflowRunById } from "@/lib/db/scoped-queries";
 
 export async function GET(
   _request: NextRequest,
@@ -12,24 +12,32 @@ export async function GET(
   }
 
   const { id } = await params;
-  const job = await getJobById(id, session.user.id);
+  const run = await getWorkflowRunById(id, session.user.id);
 
-  if (!job) {
+  if (!run) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const artifact = run.artifacts[0] ?? null;
+  const inputRefs = run.inputRefJson as Record<string, unknown> | null;
+
   return NextResponse.json({
-    ...job,
-    createdAt: job.createdAt.toISOString(),
-    completedAt: job.completedAt?.toISOString() ?? null,
-    deliveryLogs: job.deliveryLogs.map((dl) => ({
+    id: run.id,
+    sourceFileId: inputRefs?.fileId ?? "",
+    sourceFileName: inputRefs?.fileName ?? artifact?.title ?? null,
+    status: run.status,
+    resultPayload: artifact?.payloadJson ?? null,
+    errorMessage: run.errorMessage,
+    createdAt: run.createdAt.toISOString(),
+    completedAt: run.completedAt?.toISOString() ?? null,
+    deliveryLogs: artifact?.deliveries.map((dl) => ({
       id: dl.id,
-      connectorId: dl.connectorId,
+      connectorId: dl.provider,
       status: dl.status,
       errorMessage: dl.errorMessage,
       externalUrl: dl.externalUrl ?? null,
       deliveredAt: dl.deliveredAt?.toISOString() ?? null,
       retryCount: dl.retryCount,
-    })),
+    })) ?? [],
   });
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { upsertUserConfig } from "@/lib/db/scoped-queries";
+import { upsertDestinationConnection } from "@/lib/db/scoped-queries";
 import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
@@ -65,8 +65,8 @@ export async function GET(request: Request) {
     );
   }
 
-  // `sub` is the Slack User ID in the OpenID Connect response
-  const slackUserId: string = tokenData["https://slack.com/user_id"] ?? tokenData.sub;
+  const slackUserId: string =
+    tokenData["https://slack.com/user_id"] ?? tokenData.sub;
 
   if (!slackUserId) {
     return NextResponse.redirect(
@@ -74,12 +74,17 @@ export async function GET(request: Request) {
     );
   }
 
-  await upsertUserConfig(session.user.id, { slackUserId });
+  // Store in DestinationConnection
+  await upsertDestinationConnection(session.user.id, "SLACK", {
+    externalAccountId: slackUserId,
+    status: "CONNECTED",
+    enabled: true,
+    displayName: "Slack DM",
+  });
 
   const response = NextResponse.redirect(
     new URL("/dashboard/settings?connected=slack", request.url)
   );
-  // Clear the CSRF cookie
   response.cookies.set("slack_oauth_state", "", { maxAge: 0, path: "/" });
 
   return response;

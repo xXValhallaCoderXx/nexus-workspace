@@ -5,6 +5,8 @@ export const transcriptJobPayloadSchema = z.object({
   userId: z.string(),
   fileId: z.string(),
   fileName: z.string().optional(),
+  sourceEventId: z.string().optional(),
+  sourceConnectionId: z.string().optional(),
   resourceId: z.string().optional(),
   channelId: z.string().optional(),
 });

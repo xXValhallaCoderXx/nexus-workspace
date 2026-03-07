@@ -1,6 +1,14 @@
-import type { MeetingSummaryOutput } from "@/lib/ai/prompts/meeting-summary";
+export interface SlackFormatInput {
+  title: string;
+  date?: string | null;
+  attendees: string[];
+  summary: string;
+  actionItems: Array<{ owner: string; task: string; deadline?: string | null }>;
+  decisions: string[];
+  followUps: string[];
+}
 
-export function formatSlackBlocks(summary: MeetingSummaryOutput) {
+export function formatSlackBlocks(summary: SlackFormatInput) {
   const blocks: Record<string, unknown>[] = [
     {
       type: "header",

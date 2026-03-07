@@ -4,8 +4,8 @@ import {
   getUserPushChannels,
   getUserChannelRenewalErrors,
   getDashboardStats,
-  getRecentMeetings,
-  getUserConnectorConfigs,
+  getRecentWorkflowRuns,
+  getDestinationConnections,
 } from "@/lib/db/scoped-queries";
 import { Topbar } from "@/components/layout/topbar";
 import { PageHeader } from "@/components/layout/page-header";
@@ -15,32 +15,40 @@ import { RecentMeetingsPanel } from "@/components/dashboard/recent-meetings-pane
 import { ConnectionsPanel } from "@/components/dashboard/connections-panel";
 import { WorkflowsPanel } from "@/components/dashboard/workflows-panel";
 import { HowItWorksBox } from "@/components/dashboard/how-it-works-box";
-
 import { ConnectorNudgeCard } from "@/components/dashboard/connector-nudge-card";
 
 export default async function DashboardPage() {
   const session = await getSession();
   const userId = session!.user.id;
 
-  const [config, channels, renewalErrors, stats, recentMeetings, connectorConfigs] =
+  const [config, channels, renewalErrors, stats, recentRuns, destConnections] =
     await Promise.all([
       getUserConfig(userId),
       getUserPushChannels(userId),
       getUserChannelRenewalErrors(userId),
       getDashboardStats(userId),
-      getRecentMeetings(userId),
-      getUserConnectorConfigs(userId),
+      getRecentWorkflowRuns(userId),
+      getDestinationConnections(userId),
     ]);
 
   const activeChannel = channels.find((c) => c.expiration > new Date());
   const firstName = session!.user.name?.split(" ")[0] ?? "there";
 
+  // Build destination connection status map
   const connectorStatusMap = Object.fromEntries(
-    connectorConfigs.map((c) => [
-      c.connectorId,
-      { status: c.status, enabled: c.enabled },
+    destConnections.map((c) => [
+      c.provider.toLowerCase(),
+      {
+        status: c.status,
+        enabled: c.enabled,
+        configJson: c.configJson as Record<string, unknown> | null,
+      },
     ])
   );
+
+  // Map connector IDs for backward compat with UI
+  const slackConn = destConnections.find((c) => c.provider === "SLACK");
+  const hasSlackConnected = slackConn?.status === "CONNECTED";
 
   return (
     <>
@@ -102,14 +110,17 @@ export default async function DashboardPage() {
         {/* Two column layout */}
         <div className="grid grid-cols-[1fr_340px] gap-4">
           <RecentMeetingsPanel
-            meetings={recentMeetings.map((m) => ({
-              id: m.id,
-              sourceFileName: m.sourceFileName,
-              status: m.status,
-              createdAt: m.createdAt.toISOString(),
-              resultPayload: m.resultPayload as Record<string, unknown> | null,
-              destinationDelivered: m.destinationDelivered,
-            }))}
+            meetings={recentRuns.map((r) => {
+              const artifact = r.artifacts[0] ?? null;
+              const inputRefs = r.inputRefJson as Record<string, unknown> | null;
+              return {
+                id: r.id,
+                sourceFileName: (inputRefs?.fileName as string) ?? artifact?.title ?? null,
+                status: r.status,
+                createdAt: r.createdAt.toISOString(),
+                resultPayload: artifact?.payloadJson as Record<string, unknown> | null,
+              };
+            })}
           />
 
           <div className="flex flex-col gap-3.5">
@@ -118,7 +129,7 @@ export default async function DashboardPage() {
               channelActive={!!activeChannel}
               channelExpiration={activeChannel?.expiration.toISOString()}
               email={session!.user.email}
-              hasSlackConnected={!!config?.slackUserId}
+              hasSlackConnected={hasSlackConnected}
               connectorStatus={connectorStatusMap}
             />
             <WorkflowsPanel

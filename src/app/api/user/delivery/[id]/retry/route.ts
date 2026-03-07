@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { prisma } from "@/lib/db/prisma";
-import { getConnectorProvider } from "@/lib/connectors/registry";
-import { getConnectorTokens } from "@/lib/connectors/connector-auth";
-import { buildPayloadFromLegacy } from "@/lib/connectors/payload";
+import {
+  getArtifactDeliveryById,
+  updateArtifactDelivery,
+  getDestinationConnection,
+} from "@/lib/db/scoped-queries";
+import { NexusHistoryProvider } from "@/lib/destinations/nexus-history";
+import { SlackDestinationProvider } from "@/lib/destinations/slack-provider";
+import { ClickUpDestinationProvider } from "@/lib/destinations/clickup-provider";
+import type { ArtifactForDelivery, DestinationConfig } from "@/lib/destinations/types";
+import type { DestinationProvider } from "@/generated/prisma/enums";
+import { decrypt } from "@/lib/crypto/encryption";
+
+const providers: Record<string, () => import("@/lib/destinations/types").DestinationProviderContract> = {
+  NEXUS_HISTORY: () => new NexusHistoryProvider(),
+  SLACK: () => new SlackDestinationProvider(),
+  CLICKUP: () => new ClickUpDestinationProvider(),
+};
 
 export async function POST(
   _request: NextRequest,
@@ -16,97 +29,93 @@ export async function POST(
 
   const { id } = await params;
 
-  // Find the delivery log entry and verify ownership
-  const deliveryLog = await prisma.deliveryLog.findFirst({
-    where: { id },
-    include: {
-      summary: { select: { id: true, userId: true, resultPayload: true, sourceFileName: true, sourceFileId: true } },
-    },
-  });
-
-  if (!deliveryLog || deliveryLog.summary.userId !== session.user.id) {
+  const delivery = await getArtifactDeliveryById(id);
+  if (!delivery || delivery.artifact.userId !== session.user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (deliveryLog.status !== "FAILED") {
-    return NextResponse.json({ error: "Only failed deliveries can be retried" }, { status: 400 });
+  if (delivery.status !== "FAILED") {
+    return NextResponse.json(
+      { error: "Only failed deliveries can be retried" },
+      { status: 400 }
+    );
   }
 
-  const connector = getConnectorProvider(deliveryLog.connectorId);
-  if (!connector) {
-    return NextResponse.json({ error: "Connector not found" }, { status: 400 });
+  const providerFactory = providers[delivery.provider];
+  if (!providerFactory) {
+    return NextResponse.json({ error: "Provider not found" }, { status: 400 });
   }
 
-  // Get connector config for this user
-  const connectorConfig = await prisma.userConnectorConfig.findFirst({
-    where: {
-      userId: session.user.id,
-      connectorId: deliveryLog.connectorId,
+  const provider = providerFactory();
+
+  // Build destination config
+  let config: DestinationConfig;
+  if (delivery.destinationConnectionId) {
+    const conn = await getDestinationConnection(
+      session.user.id,
+      delivery.provider as DestinationProvider
+    );
+    if (!conn) {
+      return NextResponse.json(
+        { error: "Destination not configured" },
+        { status: 400 }
+      );
+    }
+    let oauthTokens = null;
+    if (conn.oauthTokensEncrypted) {
+      try {
+        oauthTokens = JSON.parse(decrypt(conn.oauthTokensEncrypted));
+      } catch {
+        return NextResponse.json({ error: "Invalid tokens" }, { status: 400 });
+      }
+    }
+    config = {
+      destinationConnectionId: conn.id,
+      provider: conn.provider,
+      enabled: conn.enabled,
+      configJson: conn.configJson as Record<string, unknown> | null,
+      oauthTokens,
+      externalAccountId: conn.externalAccountId,
+    };
+  } else {
+    config = {
+      destinationConnectionId: null,
+      provider: delivery.provider,
       enabled: true,
-    },
-  });
-
-  if (!connectorConfig) {
-    return NextResponse.json({ error: "Connector not configured" }, { status: 400 });
+      configJson: null,
+      oauthTokens: null,
+      externalAccountId: null,
+    };
   }
+
+  const artifact: ArtifactForDelivery = {
+    id: delivery.artifact.id,
+    artifactType: delivery.artifact.artifactType as ArtifactForDelivery["artifactType"],
+    title: delivery.artifact.title,
+    summaryText: delivery.artifact.summaryText ?? null,
+    payloadJson: delivery.artifact.payloadJson as Record<string, unknown> | null,
+    sourceRefsJson: delivery.artifact.sourceRefsJson as Record<string, unknown> | null,
+  };
 
   try {
-    const tokens = await getConnectorTokens(session.user.id, deliveryLog.connectorId);
-    if (!tokens) {
-      return NextResponse.json({ error: "No valid tokens" }, { status: 400 });
-    }
+    const result = await provider.deliver(artifact, config, session.user.id);
 
-    const legacyPayload = deliveryLog.summary.resultPayload as Record<string, unknown> | null;
-    if (!legacyPayload) {
-      return NextResponse.json({ error: "No payload to deliver" }, { status: 400 });
-    }
-
-    const payload = buildPayloadFromLegacy(
-      legacyPayload as {
-        title: string;
-        date?: string | null;
-        attendees: string[];
-        summary: string;
-        actionItems: Array<{ owner: string; task: string; deadline?: string | null }>;
-        decisions: string[];
-        followUps: string[];
-      },
-      {
-        summaryId: deliveryLog.summary.id,
-        sourceFileId: deliveryLog.summary.sourceFileId,
-        modelUsed: "unknown",
-        nexusBaseUrl: process.env.NEXTAUTH_URL ?? "https://app.nexus.com",
-      }
-    );
-
-    const configJson = connectorConfig.configJson as Record<string, unknown> | null;
-    const result = await connector.deliver(payload, {
-      connectorId: deliveryLog.connectorId,
-      enabled: true,
-      configJson: configJson,
-      oauthTokens: tokens,
-    });
-
-    await prisma.deliveryLog.update({
-      where: { id },
-      data: {
-        status: result.success ? "DELIVERED" : "FAILED",
-        errorMessage: result.error ?? null,
-        deliveredAt: result.success ? new Date() : null,
-        retryCount: { increment: 1 },
-      },
+    await updateArtifactDelivery(id, {
+      status: result.success ? "DELIVERED" : "FAILED",
+      errorMessage: result.error ?? null,
+      externalId: result.externalId ?? null,
+      externalUrl: result.externalUrl ?? null,
+      deliveredAt: result.success ? new Date() : undefined,
+      retryCount: { increment: 1 },
     });
 
     return NextResponse.json({ success: result.success, error: result.error });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    await prisma.deliveryLog.update({
-      where: { id },
-      data: {
-        status: "FAILED",
-        errorMessage,
-        retryCount: { increment: 1 },
-      },
+    await updateArtifactDelivery(id, {
+      status: "FAILED",
+      errorMessage,
+      retryCount: { increment: 1 },
     });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

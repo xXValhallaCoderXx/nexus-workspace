@@ -1,12 +1,23 @@
-// ──────────────────────────────────────────────
-// Shared Markdown Formatter (spec §3.4 note)
-// ──────────────────────────────────────────────
-// ClickUp accepts markdown. This utility
-// transforms the canonical payload into a formatted summary.
+export interface MarkdownPayload {
+  meetingTitle: string;
+  meetingDate: string;
+  meetingDuration?: number;
+  attendees: Array<{ name: string; email?: string }>;
+  summary: string;
+  topics: string[];
+  decisions: string[];
+  actionItems: Array<{
+    owner: string;
+    task: string;
+    ownerEmail?: string;
+    deadline?: string | null;
+  }>;
+  followUps: string[];
+  sourceFileId: string;
+  nexusUrl: string;
+}
 
-import type { MeetingSummaryPayload } from "./payload";
-
-export function formatSummaryAsMarkdown(payload: MeetingSummaryPayload): string {
+export function formatSummaryAsMarkdown(payload: MarkdownPayload): string {
   const lines: string[] = [];
 
   lines.push(`# ${payload.meetingTitle}`);
@@ -23,18 +34,18 @@ export function formatSummaryAsMarkdown(payload: MeetingSummaryPayload): string 
   }
 
   if (payload.sourceFileId) {
-    lines.push(`**Transcript:** [View in Google Drive](https://drive.google.com/file/d/${payload.sourceFileId}/view)`);
+    lines.push(
+      `**Transcript:** [View in Google Drive](https://drive.google.com/file/d/${payload.sourceFileId}/view)`
+    );
   }
   lines.push(`**Source:** [View in Nexus](${payload.nexusUrl})`);
   lines.push("");
 
-  // Summary
   lines.push("## Summary");
   lines.push("");
   lines.push(payload.summary);
   lines.push("");
 
-  // Topics
   if (payload.topics.length > 0) {
     lines.push("## Key Topics");
     lines.push("");
@@ -44,7 +55,6 @@ export function formatSummaryAsMarkdown(payload: MeetingSummaryPayload): string 
     lines.push("");
   }
 
-  // Decisions
   if (payload.decisions.length > 0) {
     lines.push("## Decisions");
     lines.push("");
@@ -54,7 +64,6 @@ export function formatSummaryAsMarkdown(payload: MeetingSummaryPayload): string 
     lines.push("");
   }
 
-  // Action Items
   if (payload.actionItems.length > 0) {
     lines.push("## Action Items");
     lines.push("");
@@ -65,7 +74,6 @@ export function formatSummaryAsMarkdown(payload: MeetingSummaryPayload): string 
     lines.push("");
   }
 
-  // Follow-Ups
   if (payload.followUps.length > 0) {
     lines.push("## Follow-Ups");
     lines.push("");
