@@ -269,7 +269,17 @@ export async function getWorkflowRunHistory(
       include: {
         artifacts: {
           take: 1,
-          select: { id: true, title: true, payloadJson: true },
+          select: {
+            id: true,
+            title: true,
+            payloadJson: true,
+            deliveries: {
+              select: {
+                provider: true,
+                status: true,
+              },
+            },
+          },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -340,7 +350,17 @@ export async function getRecentWorkflowRuns(userId: string, limit = 5) {
     include: {
       artifacts: {
         take: 1,
-        select: { id: true, title: true, payloadJson: true },
+        select: {
+          id: true,
+          title: true,
+          payloadJson: true,
+          deliveries: {
+            select: {
+              provider: true,
+              status: true,
+            },
+          },
+        },
       },
     },
     orderBy: { createdAt: "desc" },

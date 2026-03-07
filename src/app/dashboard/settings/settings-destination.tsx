@@ -82,7 +82,7 @@ export function SettingsDestination({
       {/* Nexus History — always on */}
       <DestinationRow
         name="Nexus History"
-        description="Always on — view in History page"
+        description="Always on — view in Meetings page"
         alwaysOn
       />
 

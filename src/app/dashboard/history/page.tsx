@@ -27,14 +27,18 @@ export default async function HistoryPage({
 
   return (
     <>
-      <Topbar title="History" subtitle="— all processed meetings" />
+      <Topbar title="Meetings" subtitle="— your meeting workspace" />
       <div className="flex-1 p-7">
         <PageHeader
-          title="Meeting History"
-          subtitle="All your processed transcripts"
+          title="Meetings"
+          subtitle="Manage your meeting history and pending transcripts."
         />
         <Suspense>
-          <HistoryFilterBar />
+          <HistoryFilterBar
+            total={result.total}
+            currentPage={result.page}
+            pageSize={result.limit}
+          />
         </Suspense>
         <HistoryTable
           jobs={result.runs.map((r) => {
@@ -50,6 +54,11 @@ export default async function HistoryPage({
               errorMessage: r.errorMessage,
               createdAt: r.createdAt.toISOString(),
               completedAt: r.completedAt?.toISOString() ?? null,
+              deliveries:
+                artifact?.deliveries.map((delivery) => ({
+                  provider: delivery.provider,
+                  status: delivery.status,
+                })) ?? [],
             };
           })}
           currentPage={result.page}

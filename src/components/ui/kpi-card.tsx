@@ -18,23 +18,27 @@ export function KpiCard({
   delta?: string;
 }) {
   return (
-    <div className="rounded-[14px] border border-border bg-surface p-[18px] shadow-card transition-shadow hover:shadow-card-md">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="rounded-[18px] border border-border bg-surface p-5 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-md">
+      <div className="flex items-center justify-between gap-3">
         <div
-          className={`flex h-9 w-9 items-center justify-center rounded-[9px] ${iconBg[iconColor]}`}
+          className={`flex h-11 w-11 items-center justify-center rounded-[13px] ${iconBg[iconColor]}`}
         >
           {icon}
         </div>
         {delta && (
-          <span className="rounded-full bg-bg px-2 py-[2px] text-[11px] font-bold text-muted">
+          <span className="rounded-full border border-border bg-bg px-2.5 py-1 text-[11px] font-semibold text-muted">
             {delta}
           </span>
         )}
       </div>
-      <div className="text-[26px] font-extrabold tracking-tight text-text">
-        {value}
+      <div className="mt-8">
+        <div className="text-[30px] font-extrabold tracking-tight text-text">
+          {value}
+        </div>
+        <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted2">
+          {label}
+        </div>
       </div>
-      <div className="text-[11px] font-medium text-muted2">{label}</div>
     </div>
   );
 }
