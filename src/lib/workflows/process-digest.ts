@@ -12,6 +12,7 @@ import {
   TRIAGE_CLASSIFICATION_SYSTEM_PROMPT,
   triageClassificationOutput,
   buildTriageUserContent,
+  MAX_MESSAGES_PER_BATCH,
   type TriageMessageInput,
 } from "@/lib/ai/prompts/triage-classification";
 import {
@@ -65,16 +66,18 @@ export async function processUserDigest(
     hour12: true,
   });
 
-  // Build message array for LLM
-  const messages: TriageMessageInput[] = notifications.map((n) => ({
-    id: n.id,
-    author: n.authorName,
-    content: n.content,
-    source: n.connectorId,
-    channel: (n.metadata as Record<string, unknown>)?.channel as
-      | string
-      | undefined,
-  }));
+  // Build message array for LLM (capped by MAX_MESSAGES_PER_BATCH in buildTriageUserContent)
+  const messages: TriageMessageInput[] = notifications
+    .slice(0, MAX_MESSAGES_PER_BATCH)
+    .map((n) => ({
+      id: n.id,
+      author: n.authorName,
+      content: n.content,
+      source: n.connectorId,
+      channel: (n.metadata as Record<string, unknown>)?.channel as
+        | string
+        | undefined,
+    }));
 
   // Call LLM for classification
   const response = await callOpenRouter({
@@ -83,6 +86,7 @@ export async function processUserDigest(
     systemPrompt: TRIAGE_CLASSIFICATION_SYSTEM_PROMPT,
     userContent: buildTriageUserContent(messages),
     responseFormat: "json_object",
+    maxTokens: 2048,
   });
 
   // Parse and validate
@@ -98,6 +102,7 @@ export async function processUserDigest(
         "\n\nIMPORTANT: Your previous response was invalid JSON. Output ONLY a valid JSON object matching the exact schema above.",
       userContent: buildTriageUserContent(messages),
       responseFormat: "json_object",
+      maxTokens: 2048,
     });
     parsed = triageClassificationOutput.parse(
       JSON.parse(retryResponse.content)

@@ -47,8 +47,36 @@ export interface TriageMessageInput {
   channel?: string;
 }
 
+/** Max characters per individual message sent to the LLM */
+const MAX_MESSAGE_CHARS = 1_000;
+/** Max total characters for the entire user content payload */
+const MAX_PAYLOAD_CHARS = 30_000;
+/** Max messages per LLM call */
+export const MAX_MESSAGES_PER_BATCH = 50;
+
 export function buildTriageUserContent(
   messages: TriageMessageInput[],
 ): string {
-  return JSON.stringify(messages);
+  const capped = messages.slice(0, MAX_MESSAGES_PER_BATCH);
+
+  const truncated = capped.map((m) => ({
+    ...m,
+    content:
+      m.content.length > MAX_MESSAGE_CHARS
+        ? m.content.slice(0, MAX_MESSAGE_CHARS) + "…[truncated]"
+        : m.content,
+  }));
+
+  let payload = JSON.stringify(truncated);
+
+  // If still too large, progressively shorten content
+  if (payload.length > MAX_PAYLOAD_CHARS) {
+    const shortened = truncated.map((m) => ({
+      ...m,
+      content: m.content.slice(0, 300) + "…[truncated]",
+    }));
+    payload = JSON.stringify(shortened);
+  }
+
+  return payload;
 }
