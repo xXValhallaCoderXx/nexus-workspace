@@ -30,7 +30,7 @@ const navItems = [
         ),
       },
       {
-        label: "History",
+        label: "Meetings",
         href: "/dashboard/history",
         showBadge: true,
         icon: (

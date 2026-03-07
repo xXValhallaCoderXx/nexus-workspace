@@ -15,15 +15,18 @@ export async function GET(request: Request) {
   const error = searchParams.get("error");
 
   const appBase = getAppBaseUrl();
+  const stateResult = verifyOAuthState(state);
 
   if (error) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_denied", appBase)
+      new URL(
+        stateResult?.returnTo ?? "/dashboard/settings?error=slack_denied",
+        appBase
+      )
     );
   }
 
   // Verify HMAC-signed state (works across domains — no cookie needed)
-  const stateResult = verifyOAuthState(state);
   // Also try session for same-domain flows
   const session = await getSession();
   const userId = session?.user?.id ?? stateResult?.userId;
@@ -36,7 +39,10 @@ export async function GET(request: Request) {
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_no_code", appBase)
+      new URL(
+        stateResult?.returnTo ?? "/dashboard/settings?error=slack_no_code",
+        appBase
+      )
     );
   }
 
@@ -64,7 +70,10 @@ export async function GET(request: Request) {
       })
     );
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_token_failed", appBase)
+      new URL(
+        stateResult.returnTo ?? "/dashboard/settings?error=slack_token_failed",
+        appBase
+      )
     );
   }
 
@@ -75,7 +84,10 @@ export async function GET(request: Request) {
 
   if (!slackUserId) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_no_user_id", appBase)
+      new URL(
+        stateResult.returnTo ?? "/dashboard/settings?error=slack_no_user_id",
+        appBase
+      )
     );
   }
 
@@ -100,6 +112,9 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.redirect(
-    new URL("/dashboard/settings?connected=slack", appBase)
+    new URL(
+      stateResult.returnTo ?? "/dashboard/settings?connected=slack",
+      appBase
+    )
   );
 }

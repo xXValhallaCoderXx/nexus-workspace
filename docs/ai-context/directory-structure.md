@@ -3,8 +3,12 @@
 ## `src/app/` — Next.js App Router pages & API routes
 
 ### Pages
-- `page.tsx` — Root home/login page: redirects authenticated users to `/dashboard`
+- `page.tsx` — Root home/login page: refreshed branded sign-in surface; redirects authenticated users to onboarding or dashboard based on onboarding state
 - `layout.tsx` — Root layout: SessionProvider, Inter font, metadata
+- `onboarding/layout.tsx` — One-time onboarding auth guard and completion redirect
+- `onboarding/page.tsx` — Redirects to the persisted onboarding step
+- `onboarding/connect/page.tsx` — Workspace connection step (Google Drive sync, Slack, ClickUp)
+- `onboarding/configure/page.tsx` — Workflow setup step (meeting summaries, Slack DM, Quiet Mode, ClickUp config)
 - `dashboard/layout.tsx` — Dashboard shell: Sidebar + scrollable content, processing badge
 - `dashboard/page.tsx` — Main dashboard: KPI cards, RecentMeetingsPanel, ConnectionsPanel, WorkflowsPanel, ConnectorNudgeCard
 - `dashboard/notes/page.tsx` — Browse Google Drive transcripts (DriveFilesPanel)
@@ -21,6 +25,7 @@
 
 ### User API Routes
 - `api/user/config/` — User config CRUD (GET returns all settings, PATCH updates)
+- `api/user/onboarding/` — Onboarding progress API (current step / completion state)
 - `api/user/jobs/` — Paginated workflow run history
 - `api/user/jobs/[id]/` — Single run with artifact + deliveries
 - `api/user/drive/files/` — List transcript files from Google Drive
@@ -51,6 +56,7 @@
 ## `src/components/` — React components
 
 - `dashboard/` — RecentMeetingsPanel, DriveFilesPanel, HistoryTable, HistoryFilterBar, ConnectionsPanel, WorkflowsPanel, NoteDetailModal, AlertBanner, HowItWorksBox, ConnectorNudgeCard, FirstDeliveryBadge
+- `onboarding/` — Shared onboarding shell plus connect/configure step UIs
 - `ui/` — Card, Modal, FilterChip, SearchInput, StatusBadge, KpiCard, ToggleSwitch, InfoBox
 - `layout/` — Sidebar, Topbar, PageHeader
 - `auth/` — SignInButton, SignOutButton, UserAvatar
@@ -65,14 +71,17 @@
 
 ### `auth/`
 - NextAuth config, session helpers, route guard
-- `oauth-helpers.ts` — `buildOAuthRedirectUri()`, `createOAuthState()`, `verifyOAuthState()`, `getAppBaseUrl()`
+- `oauth-helpers.ts` — `buildOAuthRedirectUri()`, `createOAuthState()`, `verifyOAuthState()`, `getAppBaseUrl()`; supports signed `returnTo` paths for onboarding-aware OAuth callbacks
 
 ### `crypto/`
 - `encryption.ts` — AES-256-GCM encrypt/decrypt for API keys and OAuth tokens
 
 ### `db/`
 - `prisma.ts` — Prisma client singleton
-- `scoped-queries.ts` — All user-scoped DB helpers (userId in WHERE). Functions for: UserConfig, DestinationConnection, WorkflowRun, Artifact, ArtifactDelivery, PendingNotification CRUD
+- `scoped-queries.ts` — All user-scoped DB helpers (userId in WHERE). Functions for: UserConfig, DestinationConnection, WorkflowRun, Artifact, ArtifactDelivery, PendingNotification CRUD, onboarding state persistence
+
+### `onboarding/`
+- `state.ts` — One-time onboarding helper logic: route step mapping, completion checks, redirect path helper
 
 ### `destinations/`
 See [Destinations](./destinations.md).

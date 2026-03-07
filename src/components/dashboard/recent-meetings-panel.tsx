@@ -5,120 +5,212 @@ import Link from "next/link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { NoteDetailModal } from "@/components/dashboard/note-detail-modal";
+import {
+  DestinationBadge,
+  WorkflowRunIcon,
+} from "@/components/dashboard/workflow-run-primitives";
 import { useNoteModal } from "@/hooks/use-note-modal";
 import { cleanMeetingTitle } from "@/lib/utils/clean-meeting-title";
+import {
+  formatRelativeDateTime,
+  getWorkflowInsightBadges,
+  getWorkflowKindLabel,
+  getWorkflowPreview,
+  type DeliveryPreview,
+} from "@/lib/utils/workflow-run-display";
 
 interface Meeting {
   id: string;
+  workflowType: string;
   sourceFileName: string | null;
   status: string;
   createdAt: string;
   resultPayload: Record<string, unknown> | null;
+  deliveries: DeliveryPreview[];
 }
 
-function MicIcon({ color }: { color: string }) {
+const statusMap: Record<
+  string,
+  { variant: "ready" | "processing" | "failed" | "pending"; label: string }
+> = {
+  COMPLETED: { variant: "ready", label: "Ready" },
+  PROCESSING: { variant: "processing", label: "Processing" },
+  FAILED: { variant: "failed", label: "Failed" },
+  PENDING: { variant: "pending", label: "Pending" },
+};
+
+function EmptyPanelState() {
   return (
-    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth="1.8">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
-    </svg>
+    <div className="px-5 py-12 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-lt">
+        <WorkflowRunIcon workflowType="MEETING_SUMMARY" status="COMPLETED" />
+      </div>
+      <p className="text-sm font-medium text-text">No meetings yet</p>
+      <p className="mt-1 text-xs text-muted2">
+        Your meeting summaries will appear here and be sent to your connected
+        destinations once a transcript is processed.
+      </p>
+      <Link
+        href="/dashboard/notes"
+        className="mt-4 inline-block text-xs font-semibold text-brand hover:underline"
+      >
+        Browse transcripts &rarr;
+      </Link>
+    </div>
   );
+}
+
+function itemTitle(meeting: Meeting) {
+  if (meeting.workflowType === "SCHEDULED_DIGEST") {
+    return meeting.sourceFileName ?? "Triage Digest";
+  }
+
+  return cleanMeetingTitle(meeting.sourceFileName);
+}
+
+function fallbackMessage(meeting: Meeting) {
+  if (meeting.status === "PROCESSING") {
+    return "Nexus is turning this transcript into a structured summary.";
+  }
+
+  if (meeting.status === "FAILED") {
+    return "This run needs attention before a summary can be viewed.";
+  }
+
+  if (meeting.status === "PENDING") {
+    return "Queued and waiting for transcript processing.";
+  }
+
+  return "Summary ready to review.";
 }
 
 function RecentMeetingsPanelInner({ meetings }: { meetings: Meeting[] }) {
   const { activeNoteId, openNote, closeNote } = useNoteModal();
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    const now = new Date();
-    const diff = now.getTime() - d.getTime();
-    const days = Math.floor(diff / 86400000);
-    if (days === 0) return `Today, ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-    if (days === 1) return `Yesterday, ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
-  };
-
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader
-        title="Recent Meetings"
-        subtitle="Click any ready meeting to view its summary"
+        title={
+          <div className="flex items-center gap-2">
+            <span>Recent meetings</span>
+            <span className="rounded-full border border-border bg-bg px-2 py-1 text-[11px] font-semibold text-muted">
+              {meetings.length}
+            </span>
+          </div>
+        }
+        subtitle="Summaries and digests flowing through your workspace."
         action={
-          <Link href="/dashboard/history" className="text-xs font-semibold text-brand hover:underline">
-            View all &rarr;
+          <Link
+            href="/dashboard/history"
+            className="text-xs font-semibold text-brand hover:underline"
+          >
+            View all meetings &rarr;
           </Link>
         }
       />
-      <div className="py-1.5">
-        {meetings.length === 0 && (
-          <div className="px-5 py-10 text-center">
-            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-lt">
-              <MicIcon color="var(--brand)" />
-            </div>
-            <p className="text-sm font-medium text-text">No meetings yet</p>
-            <p className="mt-1 text-xs text-muted2">
-              Your meeting summaries will appear here and be sent to your connected destinations once a transcript is processed.
-            </p>
-            <Link
-              href="/dashboard/notes"
-              className="mt-3 inline-block text-xs font-semibold text-brand hover:underline"
-            >
-              Browse transcripts &rarr;
-            </Link>
-          </div>
-        )}
-        {meetings.map((m) => {
-          const isProcessing = m.status === "PROCESSING";
-          const isReady = m.status === "COMPLETED";
+      {meetings.length === 0 ? (
+        <EmptyPanelState />
+      ) : (
+        <div className="divide-y divide-border">
+          {meetings.map((meeting) => {
+            const statusInfo =
+              statusMap[meeting.status] ?? statusMap.PENDING;
+            const isReady = meeting.status === "COMPLETED";
+            const preview =
+              getWorkflowPreview(meeting.workflowType, meeting.resultPayload) ??
+              fallbackMessage(meeting);
+            const insightBadges = getWorkflowInsightBadges(
+              meeting.workflowType,
+              meeting.resultPayload
+            );
+            const visibleDeliveries = meeting.deliveries.slice(0, 3);
 
-          return (
-            <div
-              key={m.id}
-              onClick={() => isReady && openNote(m.id)}
-              className={`flex items-start gap-3 px-5 py-3 transition-colors ${
-                isReady ? "cursor-pointer hover:bg-bg" : ""
-              }`}
-            >
-              <div
-                className={`mt-[1px] flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] ${
-                  isProcessing ? "bg-amber-lt" : "bg-brand-lt"
+            return (
+              <button
+                key={meeting.id}
+                type="button"
+                onClick={() => isReady && openNote(meeting.id)}
+                disabled={!isReady}
+                className={`group flex w-full items-start gap-4 px-5 py-4 text-left transition-colors ${
+                  isReady ? "hover:bg-bg/70" : "disabled:cursor-default"
                 }`}
               >
-                <MicIcon color={isProcessing ? "var(--amber)" : "var(--brand)"} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-semibold text-text">
-                    {cleanMeetingTitle(m.sourceFileName)}
-                  </span>
-                  <StatusBadge
-                    variant={
-                      m.status === "COMPLETED"
-                        ? "ready"
-                        : m.status === "PROCESSING"
-                          ? "processing"
-                          : m.status === "FAILED"
-                            ? "failed"
-                            : "pending"
-                    }
-                  >
-                    {m.status === "COMPLETED"
-                      ? "Ready"
-                      : m.status === "PROCESSING"
-                        ? "Processing"
-                        : m.status === "FAILED"
-                          ? "Failed"
-                          : "Pending"}
+                <WorkflowRunIcon
+                  workflowType={meeting.workflowType}
+                  status={meeting.status}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-[15px] font-semibold text-text">
+                      {itemTitle(meeting)}
+                    </p>
+                    <span className="rounded-full bg-bg px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted2">
+                      {getWorkflowKindLabel(meeting.workflowType)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[12px] text-muted2">
+                    {formatRelativeDateTime(meeting.createdAt)}
+                  </p>
+                  <p className="mt-2 overflow-hidden text-[13px] leading-6 text-muted [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                    {preview}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {insightBadges.slice(0, 3).map((insight) => (
+                      <span
+                        key={insight}
+                        className="rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-muted"
+                      >
+                        {insight}
+                      </span>
+                    ))}
+                    {visibleDeliveries.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        {visibleDeliveries.map((delivery) => (
+                          <DestinationBadge
+                            key={`${meeting.id}-${delivery.provider}`}
+                            delivery={delivery}
+                            compact
+                          />
+                        ))}
+                        {meeting.deliveries.length > visibleDeliveries.length && (
+                          <span className="rounded-full border border-border bg-surface px-2 py-1 text-[11px] font-medium text-muted">
+                            +{meeting.deliveries.length - visibleDeliveries.length}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-3">
+                  <StatusBadge variant={statusInfo.variant}>
+                    {statusInfo.label}
                   </StatusBadge>
+                  <span
+                    className={`flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface2 text-muted transition-colors ${
+                      isReady ? "group-hover:text-text" : "opacity-40"
+                    }`}
+                  >
+                    <svg
+                      width="15"
+                      height="15"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m9 6 6 6-6 6"
+                      />
+                    </svg>
+                  </span>
                 </div>
-                <div className="mt-[3px] text-[11px] text-muted2">
-                  {formatDate(m.createdAt)}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <NoteDetailModal jobId={activeNoteId} onClose={closeNote} />
     </Card>
   );

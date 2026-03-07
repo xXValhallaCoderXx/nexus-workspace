@@ -14,6 +14,7 @@ All models are defined in `prisma/schema.prisma`. Generated client at `src/gener
 | `ArtifactType` | MEETING_SUMMARY, DIGEST |
 | `RunStatus` | PENDING, PROCESSING, COMPLETED, FAILED |
 | `DeliveryStatus` | PENDING, DELIVERED, FAILED |
+| `OnboardingStep` | CONNECT_WORKSPACE, CONFIGURE_WORKFLOWS |
 
 ## Core Models
 
@@ -31,6 +32,8 @@ Per-user settings. One-to-one with User.
 | `dismissedConnectorNudge` | Boolean | Hides ClickUp promo card |
 | `encryptedOpenRouterKey` | String? | BYOK API key (AES-256-GCM) |
 | `customSystemPrompt` | String? | Custom meeting summary prompt |
+| `onboardingStep` | OnboardingStep | Current first-run onboarding step |
+| `onboardingCompletedAt` | DateTime? | Null while onboarding is required; set when completed or skipped |
 
 ### SourceConnection
 Per-user source integration. Unique on `(userId, provider)`.

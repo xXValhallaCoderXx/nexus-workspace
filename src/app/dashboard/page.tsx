@@ -33,6 +33,24 @@ export default async function DashboardPage() {
 
   const activeChannel = channels.find((c) => c.expiration > new Date());
   const firstName = session!.user.name?.split(" ")[0] ?? "there";
+  const dashboardSignal =
+    renewalErrors.length > 0
+      ? {
+          label: "Drive sync needs attention",
+          className: "border-[#FDE68A] bg-amber-lt text-[#B45309]",
+          dotClassName: "bg-amber",
+        }
+      : activeChannel
+        ? {
+            label: "Drive sync active",
+            className: "border-[#BBF7D0] bg-green-lt text-[#15803D]",
+            dotClassName: "bg-green",
+          }
+        : {
+            label: "Connect Google Drive to begin",
+            className: "border-brand/10 bg-brand-lt text-brand",
+            dotClassName: "bg-brand",
+          };
 
   // Build destination connection status map
   const connectorStatusMap = Object.fromEntries(
@@ -63,13 +81,21 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        <PageHeader
-          title={`Good morning, ${firstName}`}
-          subtitle={`You have ${stats.meetingsThisWeek} meeting${stats.meetingsThisWeek !== 1 ? "s" : ""} processed this week${stats.processing > 0 ? ` — ${stats.processing} still processing` : ""}`}
-        />
+        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <PageHeader
+            title={`Good morning, ${firstName}`}
+            subtitle={`Here's what Nexus has done across your recent meetings${stats.processing > 0 ? ` — ${stats.processing} still processing` : "."}`}
+          />
+          <div
+            className={`inline-flex items-center gap-2 self-start rounded-full border px-3.5 py-2 text-xs font-semibold ${dashboardSignal.className}`}
+          >
+            <span className={`h-2 w-2 rounded-full ${dashboardSignal.dotClassName}`} />
+            {dashboardSignal.label}
+          </div>
+        </div>
 
         {/* KPI Row */}
-        <div className="mb-6 grid grid-cols-3 gap-3">
+        <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <KpiCard
             icon={
               <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="1.8">
@@ -80,7 +106,7 @@ export default async function DashboardPage() {
             iconColor="brand"
             value={stats.meetingsThisWeek}
             label="Meetings this week"
-            delta={`${stats.meetingsThisWeek} this week`}
+            delta={`${stats.meetingsThisWeek} processed`}
           />
           <KpiCard
             icon={
@@ -91,7 +117,7 @@ export default async function DashboardPage() {
             iconColor="green"
             value={stats.summariesReady}
             label="Summaries ready"
-            delta={stats.meetingsThisWeek > 0 ? `${Math.round((stats.summariesReady / stats.meetingsThisWeek) * 100)}% this week` : "—"}
+            delta={`${stats.summariesReady} ready`}
           />
           <KpiCard
             icon={
@@ -103,22 +129,28 @@ export default async function DashboardPage() {
             iconColor="amber"
             value={stats.processing}
             label="Currently processing"
-            delta="—"
+            delta={stats.processing > 0 ? `${stats.processing} in flight` : "Queue clear"}
           />
         </div>
 
         {/* Two column layout */}
-        <div className="grid grid-cols-[1fr_340px] gap-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           <RecentMeetingsPanel
             meetings={recentRuns.map((r) => {
               const artifact = r.artifacts[0] ?? null;
               const inputRefs = r.inputRefJson as Record<string, unknown> | null;
               return {
                 id: r.id,
+                workflowType: r.workflowType,
                 sourceFileName: (inputRefs?.fileName as string) ?? artifact?.title ?? null,
                 status: r.status,
                 createdAt: r.createdAt.toISOString(),
                 resultPayload: artifact?.payloadJson as Record<string, unknown> | null,
+                deliveries:
+                  artifact?.deliveries.map((delivery) => ({
+                    provider: delivery.provider,
+                    status: delivery.status,
+                  })) ?? [],
               };
             })}
           />

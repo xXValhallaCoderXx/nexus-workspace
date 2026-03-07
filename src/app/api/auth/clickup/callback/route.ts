@@ -3,7 +3,6 @@ import { getSession } from "@/lib/auth/get-session";
 import { upsertDestinationConnection } from "@/lib/db/scoped-queries";
 import { encrypt } from "@/lib/crypto/encryption";
 import {
-  buildOAuthRedirectUri,
   verifyOAuthState,
   getAppBaseUrl,
 } from "@/lib/auth/oauth-helpers";
@@ -15,15 +14,18 @@ export async function GET(request: Request) {
   const error = searchParams.get("error");
 
   const appBase = getAppBaseUrl();
+  const stateResult = verifyOAuthState(state);
 
   if (error) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=clickup_denied", appBase)
+      new URL(
+        stateResult?.returnTo ?? "/dashboard/settings?error=clickup_denied",
+        appBase
+      )
     );
   }
 
   // Verify HMAC-signed state (works across domains — no cookie needed)
-  const stateResult = verifyOAuthState(state);
   const session = await getSession();
   const userId = session?.user?.id ?? stateResult?.userId;
 
@@ -35,7 +37,10 @@ export async function GET(request: Request) {
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=clickup_no_code", appBase)
+      new URL(
+        stateResult?.returnTo ?? "/dashboard/settings?error=clickup_no_code",
+        appBase
+      )
     );
   }
 
@@ -63,7 +68,10 @@ export async function GET(request: Request) {
       })
     );
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=clickup_token_failed", appBase)
+      new URL(
+        stateResult.returnTo ?? "/dashboard/settings?error=clickup_token_failed",
+        appBase
+      )
     );
   }
 
@@ -78,6 +86,9 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.redirect(
-    new URL("/dashboard/settings?connected=clickup", appBase)
+    new URL(
+      stateResult.returnTo ?? "/dashboard/settings?connected=clickup",
+      appBase
+    )
   );
 }

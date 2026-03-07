@@ -5,7 +5,7 @@
 
 ## What It Is
 
-Nexus is a **Meeting Intelligence** app that automatically captures Google Meet transcripts from Google Drive, processes them with AI (via OpenRouter), and delivers structured summaries to multiple configurable destinations. It also includes an **Omnichannel Triage Digest** pipeline that batches Slack @mentions into AI-classified digests.
+Nexus is a **Meeting Intelligence** app that automatically captures Google Meet transcripts from Google Drive, processes them with AI (via OpenRouter), and delivers structured summaries to multiple configurable destinations. It also includes an **Omnichannel Triage Digest** pipeline that batches Slack @mentions into AI-classified digests, plus a guided **first-run onboarding flow** for login, workspace connections, and workflow setup.
 
 ## Related Docs
 
@@ -31,12 +31,13 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 ### Meeting Summary Pipeline
 
 1. User signs in with Google → NextAuth stores OAuth tokens (including Drive access)
-2. A **Google Drive Push Channel** (`PushChannel` model) watches for new transcript files
-3. New transcript → webhook at `/api/webhooks/google-drive` → creates `SourceEvent` + `SourceItem` → enqueues job via QStash
-4. Worker at `/api/workers/process-transcript` creates `WorkflowRun`, runs `MeetingSummaryHandler`, creates `Artifact`, delivers via planner
-5. Run lifecycle: PENDING → PROCESSING → COMPLETED/FAILED
-6. `Artifact.payloadJson` contains structured summary: title, date, attendees, summary text, action items, decisions, follow-ups
-7. Delivery is **additive**: Nexus History always records the artifact; Slack DM and ClickUp Docs are independent toggles
+2. Brand-new users are routed through `/onboarding/connect` → `/onboarding/configure` once, using `UserConfig.onboardingStep` and `UserConfig.onboardingCompletedAt`
+3. A **Google Drive Push Channel** (`PushChannel` model) watches for new transcript files
+4. New transcript → webhook at `/api/webhooks/google-drive` → creates `SourceEvent` + `SourceItem` → enqueues job via QStash
+5. Worker at `/api/workers/process-transcript` creates `WorkflowRun`, runs `MeetingSummaryHandler`, creates `Artifact`, delivers via planner
+6. Run lifecycle: PENDING → PROCESSING → COMPLETED/FAILED
+7. `Artifact.payloadJson` contains structured summary: title, date, attendees, summary text, action items, decisions, follow-ups
+8. Delivery is **additive**: Nexus History always records the artifact; Slack DM and ClickUp Docs are independent toggles
 
 ### Omnichannel Triage Pipeline
 
@@ -54,6 +55,7 @@ See [Omnichannel Triage](./omnichannel-triage.md) for the full pipeline. Summary
 - **HMAC-signed state tokens**: OAuth CSRF protection uses `createOAuthState(userId)` / `verifyOAuthState(state)` instead of cookies. Necessary because cookies set on localhost aren't sent through ngrok (different domain).
 - **Slack OAuth**: Uses OAuth V2 flow (`oauth/v2/authorize`) with `user_scope=search:read`. Stores encrypted user access token in `DestinationConnection.oauthTokensEncrypted` for `search.messages` API. Bot token (`SLACK_BOT_TOKEN` env) used separately for sending DMs.
 - **ClickUp OAuth**: Standard OAuth2 flow. Stores encrypted access/refresh tokens.
+- **OAuth return routing**: Slack and ClickUp OAuth routes support a signed `returnTo` path inside the OAuth state token so onboarding can round-trip to `/onboarding/connect` instead of always bouncing through Settings.
 
 ## External API Data Controls
 
@@ -116,6 +118,7 @@ Implemented in:
 ## UX Patterns
 
 - **Note viewing**: Universal modal pattern — clicking any "Ready" item opens `NoteDetailModal` via `?note=<runId>` URL param
+- **Onboarding**: New users see a one-time onboarding flow after Google sign-in. They can skip from either step, and skip marks onboarding complete so future visits land directly on the dashboard.
 - **Delivery retry**: Failed deliveries have per-destination retry buttons in the modal
 - **Title cleanup**: Raw Google Drive filenames cleaned via `cleanMeetingTitle()` before display
 - **Connector nudge card**: Promotional card on dashboard after 3+ meetings when ClickUp not connected

@@ -28,6 +28,22 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  events: {
+    async createUser({ user }) {
+      await prisma.userConfig.upsert({
+        where: { userId: user.id },
+        update: {
+          onboardingStep: "CONNECT_WORKSPACE",
+          onboardingCompletedAt: null,
+        },
+        create: {
+          userId: user.id,
+          onboardingStep: "CONNECT_WORKSPACE",
+          onboardingCompletedAt: null,
+        },
+      });
+    },
+  },
   pages: {
     signIn: "/",
   },
