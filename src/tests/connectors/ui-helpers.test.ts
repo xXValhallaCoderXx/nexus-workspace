@@ -7,11 +7,9 @@ describe("Destination label mapping", () => {
   const destinationLabels: Record<string, string> = {
     DATABASE: "Nexus",
     SLACK: "Slack",
-    ATTIO: "Attio",
     CLICKUP: "ClickUp",
     nexus_history: "Nexus",
     slack: "Slack",
-    attio: "Attio",
     clickup: "ClickUp",
   };
 
@@ -24,7 +22,6 @@ describe("Destination label mapping", () => {
   });
 
   it("maps connector IDs to display names", () => {
-    expect(destinationLabels["attio"]).toBe("Attio");
     expect(destinationLabels["clickup"]).toBe("ClickUp");
   });
 
@@ -45,10 +42,10 @@ describe("Destination string parsing", () => {
   });
 
   it("handles whitespace", () => {
-    expect(parseDestinations("DATABASE, SLACK, attio")).toEqual([
+    expect(parseDestinations("DATABASE, SLACK, clickup")).toEqual([
       "DATABASE",
       "SLACK",
-      "attio",
+      "clickup",
     ]);
   });
 

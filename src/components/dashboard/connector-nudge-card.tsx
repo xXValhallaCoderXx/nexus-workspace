@@ -5,20 +5,18 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 
 export function ConnectorNudgeCard({
-  hasCrmConnected,
   hasPmConnected,
   meetingCount,
   dismissed,
 }: {
-  hasCrmConnected: boolean;
   hasPmConnected: boolean;
   meetingCount: number;
   dismissed: boolean;
 }) {
   const [hidden, setHidden] = useState(dismissed);
 
-  // Only show when user has 3+ meetings and no CRM/PM connected
-  if (hidden || meetingCount < 3 || (hasCrmConnected && hasPmConnected)) {
+  // Only show when user has 3+ meetings and no PM connected
+  if (hidden || meetingCount < 3 || hasPmConnected) {
     return null;
   }
 
@@ -32,13 +30,6 @@ export function ConnectorNudgeCard({
   }
 
   const suggestions: Array<{ name: string; desc: string; href: string }> = [];
-  if (!hasCrmConnected) {
-    suggestions.push({
-      name: "Attio CRM",
-      desc: "Auto-create meeting notes on CRM records",
-      href: "/api/auth/attio",
-    });
-  }
   if (!hasPmConnected) {
     suggestions.push({
       name: "ClickUp",

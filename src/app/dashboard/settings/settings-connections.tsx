@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Modal } from "@/components/ui/modal";
-import { AttioConfigModal } from "./attio-config-modal";
 import { ClickUpConfigModal } from "./clickup-config-modal";
 
 type ConnectorStatusMap = Record<
@@ -61,20 +60,14 @@ export function SettingsConnections({
     }
   }
 
-  const attio = connectorStatus["attio"];
   const clickup = connectorStatus["clickup"];
 
-  const attioConnected = attio?.status === "CONNECTED";
-  const attioExpired = attio?.status === "EXPIRED";
   const clickupConnected = clickup?.status === "CONNECTED";
   const clickupExpired = clickup?.status === "EXPIRED";
 
   function getConfigLabel(connectorId: string): string | null {
     const cfg = connectorStatus[connectorId]?.configJson;
     if (!cfg) return null;
-    if (connectorId === "attio" && cfg.parent_record_name) {
-      return `Notes on ${cfg.parent_record_name}`;
-    }
     if (connectorId === "clickup") {
       const parts = [cfg.workspace_name, cfg.space_name, cfg.folder_name].filter(Boolean);
       return parts.length > 0 ? parts.join(" > ") : null;
@@ -86,10 +79,6 @@ export function SettingsConnections({
     slack: {
       title: "Disconnect Slack?",
       body: "Meeting summaries will no longer be sent via Slack DM. You can reconnect at any time.",
-    },
-    attio: {
-      title: "Disconnect Attio?",
-      body: "Meeting summaries will no longer be sent to Attio. Your existing notes in Attio will not be affected. You can reconnect at any time.",
     },
     clickup: {
       title: "Disconnect ClickUp?",
@@ -162,37 +151,6 @@ export function SettingsConnections({
           }
         />
 
-        {/* Attio */}
-        <ConnectionRow
-          name="Attio CRM"
-          detail={
-            attioExpired
-              ? "Connection expired — reconnect to continue"
-              : attioConnected
-                ? getConfigLabel("attio") ?? "Connected"
-                : "CRM integration for meeting notes"
-          }
-          badgeVariant={attioExpired ? "expired" : attioConnected ? "connected" : "pending"}
-          badgeText={attioExpired ? "Expired" : attioConnected ? "Connected" : "Disconnected"}
-          hasBorder
-          actions={
-            attioConnected || attioExpired ? (
-              <ConnectedActions
-                configLabel={getConfigLabel("attio")}
-                onConfigure={() => setConfigureModal("attio")}
-                onDisconnect={() => setConfirmDisconnect("attio")}
-              />
-            ) : (
-              <a
-                href="/api/auth/attio"
-                className="rounded-[9px] bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#4A3CE0]"
-              >
-                Connect Attio
-              </a>
-            )
-          }
-        />
-
         {/* ClickUp */}
         <ConnectionRow
           name="ClickUp"
@@ -252,15 +210,6 @@ export function SettingsConnections({
       </Modal>
 
       {/* Config Modals */}
-      <AttioConfigModal
-        open={configureModal === "attio"}
-        onClose={() => setConfigureModal(null)}
-        existingConfig={
-          attio?.configJson
-            ? (attio.configJson as { parent_object: string; parent_record_id: string; parent_record_name?: string })
-            : null
-        }
-      />
       <ClickUpConfigModal
         open={configureModal === "clickup"}
         onClose={() => setConfigureModal(null)}

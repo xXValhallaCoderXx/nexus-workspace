@@ -137,11 +137,9 @@ function RecentMeetingsPanelInner({ meetings }: { meetings: Meeting[] }) {
 const destLabels: Record<string, string> = {
   DATABASE: "Nexus",
   SLACK: "Slack",
-  ATTIO: "Attio",
   CLICKUP: "ClickUp",
   nexus_history: "Nexus",
   slack: "Slack",
-  attio: "Attio",
   clickup: "ClickUp",
 };
 

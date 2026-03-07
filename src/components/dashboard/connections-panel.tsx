@@ -22,7 +22,6 @@ export function ConnectionsPanel({
   hasSlackConnected?: boolean;
   connectorStatus?: ConnectorStatusMap;
 }) {
-  const attio = connectorStatus?.["attio"];
   const clickup = connectorStatus?.["clickup"];
 
   // Collect all connection rows with problem status first
@@ -59,15 +58,6 @@ export function ConnectionsPanel({
       variant: "connected",
       label: "Connected",
       hasProblem: false,
-    });
-  }
-  if (attio) {
-    rows.push({
-      name: "Attio CRM",
-      detail: attio.status === "EXPIRED" ? "Connection expired" : "Meeting notes",
-      variant: attio.status === "CONNECTED" ? "connected" : attio.status === "EXPIRED" ? "expired" : "pending",
-      label: attio.status === "CONNECTED" ? "Connected" : attio.status === "EXPIRED" ? "Expired" : "Disconnected",
-      hasProblem: attio.status === "EXPIRED",
     });
   }
   if (clickup) {

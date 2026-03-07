@@ -12,7 +12,7 @@ export async function GET() {
 
   const params = new URLSearchParams({
     client_id: process.env.CLICKUP_CLIENT_ID!,
-    redirect_uri: `${process.env.WEBHOOK_BASE_URL}/api/auth/clickup/callback`,
+    redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/clickup/callback`,
     state,
   });
 

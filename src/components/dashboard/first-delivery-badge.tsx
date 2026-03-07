@@ -22,7 +22,6 @@ function markSeen(dest: string) {
 }
 
 const destLabels: Record<string, string> = {
-  attio: "Attio",
   clickup: "ClickUp",
   SLACK: "Slack",
   slack: "Slack",

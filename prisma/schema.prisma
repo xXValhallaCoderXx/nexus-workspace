@@ -98,9 +98,9 @@ model UserConfig {
 model UserConnectorConfig {
   id           String          @id @default(cuid())
   userId       String
-  connectorId  String          // 'nexus_history' | 'slack' | 'attio' | 'clickup'
+  connectorId  String          // 'nexus_history' | 'slack' | 'clickup'
   enabled      Boolean         @default(true)
-  configJson   Json?           // Destination-specific config (e.g. Attio record, ClickUp space)
+  configJson   Json?           // Destination-specific config (e.g. ClickUp space)
   oauthTokens  String?         @db.Text // Encrypted JSON: access_token, refresh_token, expires_at
   status       ConnectorStatus @default(DISCONNECTED)
   createdAt    DateTime        @default(now())
@@ -115,9 +115,10 @@ model UserConnectorConfig {
 model DeliveryLog {
   id           String         @id @default(cuid())
   summaryId    String
-  connectorId  String         // 'nexus_history' | 'slack' | 'attio' | 'clickup'
+  connectorId  String         // 'nexus_history' | 'slack' | 'clickup'
   status       DeliveryStatus @default(PENDING)
   errorMessage String?        @db.Text
+  externalUrl  String?        // Link to the delivered resource (e.g. ClickUp doc URL)
   deliveredAt  DateTime?
   retryCount   Int            @default(0)
   createdAt    DateTime       @default(now())

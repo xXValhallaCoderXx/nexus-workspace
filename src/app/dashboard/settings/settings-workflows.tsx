@@ -23,9 +23,7 @@ export function SettingsWorkflows({
   const [isSlackDm, setIsSlackDm] = useState(slackDmEnabled);
   const [loadingField, setLoadingField] = useState<string | null>(null);
 
-  const attio = connectorStatus["attio"];
   const clickup = connectorStatus["clickup"];
-  const attioReady = attio?.status === "CONNECTED" && attio?.enabled && !!attio?.configJson;
   const clickupReady = clickup?.status === "CONNECTED" && clickup?.enabled && !!clickup?.configJson;
 
   async function handleToggle(field: "meetingSummariesEnabled" | "slackDmEnabled") {
@@ -85,19 +83,6 @@ export function SettingsWorkflows({
             onToggle={() => handleToggle("slackDmEnabled")}
             disabled={loadingField !== null}
           />
-        </div>
-      )}
-
-      {/* Attio note toggle — only visible when Attio is connected + configured + enabled */}
-      {attioReady && (
-        <div className="flex items-center justify-between border-t border-border py-[11px]">
-          <div>
-            <div className="text-[13px] font-medium text-text">Attio note on ready</div>
-            <div className="mt-[2px] text-[11px] text-muted2">
-              Create Attio note when a summary is complete
-            </div>
-          </div>
-          <StatusLabel active />
         </div>
       )}
 

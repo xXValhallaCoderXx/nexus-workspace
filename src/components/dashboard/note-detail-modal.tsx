@@ -19,6 +19,7 @@ interface DeliveryLogEntry {
   connectorId: string;
   status: string;
   errorMessage: string | null;
+  externalUrl: string | null;
   deliveredAt: string | null;
   retryCount: number;
 }
@@ -242,7 +243,6 @@ function SummaryView({ payload }: { payload: MeetingSummary }) {
 const connectorLabels: Record<string, string> = {
   DATABASE: "Nexus History",
   SLACK: "Slack",
-  attio: "Attio CRM",
   clickup: "ClickUp",
 };
 
@@ -258,6 +258,7 @@ function DeliverySection({ job }: { job: JobResponse }) {
     status: "delivered" | "failed" | "pending";
     time: string | null;
     error: string | null;
+    externalUrl: string | null;
   }> = [];
 
   if (job.deliveryLogs && job.deliveryLogs.length > 0) {
@@ -269,6 +270,7 @@ function DeliverySection({ job }: { job: JobResponse }) {
         status: dl.status === "DELIVERED" ? "delivered" : dl.status === "FAILED" ? "failed" : "pending",
         time: dl.deliveredAt,
         error: dl.errorMessage,
+        externalUrl: dl.externalUrl ?? null,
       });
     }
   } else if (job.destinationDelivered) {
@@ -282,6 +284,7 @@ function DeliverySection({ job }: { job: JobResponse }) {
         status: "delivered",
         time: job.completedAt,
         error: null,
+        externalUrl: null,
       });
     }
   }
@@ -336,7 +339,21 @@ function DeliverySection({ job }: { job: JobResponse }) {
                         : "bg-amber"
                   }`}
                 />
-                <span className="text-[13px] text-text">{item.label}</span>
+                {item.externalUrl ? (
+                  <a
+                    href={item.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[13px] font-medium text-brand hover:underline"
+                  >
+                    {item.label}
+                    <svg className="ml-1 inline-block" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+                    </svg>
+                  </a>
+                ) : (
+                  <span className="text-[13px] text-text">{item.label}</span>
+                )}
                 {item.time && (
                   <span className="text-[10px] text-muted2">
                     {new Date(item.time).toLocaleString()}

@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       code,
       client_id: process.env.SLACK_CLIENT_ID!,
       client_secret: process.env.SLACK_CLIENT_SECRET!,
-      redirect_uri: `${process.env.WEBHOOK_BASE_URL}/api/auth/slack/callback`,
+      redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/slack/callback`,
     }),
   });
 

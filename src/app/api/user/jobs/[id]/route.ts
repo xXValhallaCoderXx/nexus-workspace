@@ -27,6 +27,7 @@ export async function GET(
       connectorId: dl.connectorId,
       status: dl.status,
       errorMessage: dl.errorMessage,
+      externalUrl: dl.externalUrl ?? null,
       deliveredAt: dl.deliveredAt?.toISOString() ?? null,
       retryCount: dl.retryCount,
     })),

@@ -110,6 +110,7 @@ export async function updateDeliveryLog(
   data: {
     status?: "PENDING" | "DELIVERED" | "FAILED";
     errorMessage?: string | null;
+    externalUrl?: string | null;
     deliveredAt?: Date;
     retryCount?: { increment: number };
   }
@@ -119,6 +120,7 @@ export async function updateDeliveryLog(
     data: {
       status: data.status,
       errorMessage: data.errorMessage,
+      externalUrl: data.externalUrl,
       deliveredAt: data.deliveredAt,
       ...(data.retryCount ? { retryCount: data.retryCount } : {}),
     },

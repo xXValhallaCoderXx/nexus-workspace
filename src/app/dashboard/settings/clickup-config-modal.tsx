@@ -103,7 +103,7 @@ export function ClickUpConfigModal({
       return;
     }
     setLoadingSpaces(true);
-    fetch(`/api/user/connectors/clickup/spaces?team_id=${selectedWorkspace}`)
+    fetch(`/api/user/connectors/clickup/spaces?workspaceId=${selectedWorkspace}`)
       .then((r) => r.json())
       .then((data) => setSpaces(data.spaces ?? []))
       .catch(() => setError("Failed to load spaces"))
@@ -117,7 +117,7 @@ export function ClickUpConfigModal({
       return;
     }
     setLoadingFolders(true);
-    fetch(`/api/user/connectors/clickup/folders?space_id=${selectedSpace}`)
+    fetch(`/api/user/connectors/clickup/folders?spaceId=${selectedSpace}`)
       .then((r) => r.json())
       .then((data) => setFolders(data.folders ?? []))
       .catch(() => setError("Failed to load folders"))

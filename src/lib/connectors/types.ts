@@ -51,7 +51,7 @@ export interface UserConnectorConfig {
 export interface DeliveryResult {
   success: boolean;
   connectorId: string;
-  /** External resource ID (e.g. Attio note ID, ClickUp doc ID) */
+  /** External resource ID (e.g. ClickUp doc ID) */
   externalId?: string;
   error?: string;
 }
@@ -59,7 +59,7 @@ export interface DeliveryResult {
 // ── Connector Interface ─────────────────────
 
 export interface Connector {
-  /** Unique identifier: 'attio', 'clickup', 'slack', etc. */
+  /** Unique identifier: 'clickup', 'slack', etc. */
   readonly id: string;
 
   /** Human-readable name for the Settings UI */

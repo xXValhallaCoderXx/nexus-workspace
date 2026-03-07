@@ -20,13 +20,10 @@ export function SettingsDestination({
 }) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [slackEnabled, setSlackEnabled] = useState(slackDmEnabled);
-  const [attioEnabled, setAttioEnabled] = useState(connectorStatus["attio"]?.enabled ?? false);
   const [clickupEnabled, setClickupEnabled] = useState(connectorStatus["clickup"]?.enabled ?? false);
   const [loadingToggle, setLoadingToggle] = useState<string | null>(null);
 
-  const attio = connectorStatus["attio"];
   const clickup = connectorStatus["clickup"];
-  const attioReady = attio?.status === "CONNECTED" && !!attio?.configJson;
   const clickupReady = clickup?.status === "CONNECTED" && !!clickup?.configJson;
 
   async function handleDisconnectSlack() {
@@ -55,8 +52,7 @@ export function SettingsDestination({
   }
 
   async function handleToggleConnector(connectorId: string) {
-    const isAttio = connectorId === "attio";
-    const currentValue = isAttio ? attioEnabled : clickupEnabled;
+    const currentValue = clickupEnabled;
     const newValue = !currentValue;
     setLoadingToggle(connectorId);
     try {
@@ -69,8 +65,7 @@ export function SettingsDestination({
         }),
       });
       if (res.ok) {
-        if (isAttio) setAttioEnabled(newValue);
-        else setClickupEnabled(newValue);
+        setClickupEnabled(newValue);
       }
     } finally {
       setLoadingToggle(null);
@@ -104,23 +99,6 @@ export function SettingsDestination({
         onToggle={handleToggleSlack}
         loading={loadingToggle === "slack"}
         connectHref={hasSlackConnected ? undefined : "/api/auth/slack"}
-      />
-
-      {/* Attio CRM */}
-      <DestinationRow
-        name="Attio CRM"
-        description={
-          attioReady
-            ? "Creates a note on the selected record"
-            : attio?.status === "CONNECTED"
-              ? "Configure a default record in Connections"
-              : "Not connected"
-        }
-        available={attioReady}
-        enabled={attioEnabled}
-        onToggle={() => handleToggleConnector("attio")}
-        loading={loadingToggle === "attio"}
-        connectHref={attioReady ? undefined : "/api/auth/attio"}
       />
 
       {/* ClickUp */}

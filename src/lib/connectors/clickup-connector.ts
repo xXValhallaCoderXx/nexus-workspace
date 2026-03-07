@@ -70,6 +70,63 @@ export class ClickUpConnector implements Connector {
     return !!(config.workspace_id && config.space_id);
   }
 
+  private static readonly NEXUS_DOC_NAME = "Meeting Summaries";
+
+  /**
+   * Find the shared "Meeting Summaries" doc, or create it if it doesn't exist.
+   */
+  private async findOrCreateDoc(
+    workspaceId: string,
+    parentId: string,
+    parentType: number,
+    accessToken: string
+  ): Promise<{ id: string } | { error: string }> {
+    // Search existing docs for our shared doc
+    const listRes = await fetch(
+      `https://api.clickup.com/api/v3/workspaces/${workspaceId}/docs`,
+      { headers: { Authorization: accessToken } }
+    );
+
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      const existing = listData.docs?.find(
+        (d: { name: string; parent?: { id: string }; deleted: boolean }) =>
+          d.name === ClickUpConnector.NEXUS_DOC_NAME &&
+          d.parent?.id === parentId &&
+          !d.deleted
+      );
+      if (existing) return { id: existing.id };
+    }
+
+    // Create the shared doc
+    const createRes = await fetch(
+      `https://api.clickup.com/api/v3/workspaces/${workspaceId}/docs`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: accessToken,
+        },
+        body: JSON.stringify({
+          name: ClickUpConnector.NEXUS_DOC_NAME,
+          parent: { id: parentId, type: parentType },
+          visibility: "PRIVATE",
+          create_page: false,
+        }),
+      }
+    );
+
+    if (!createRes.ok) {
+      const errorBody = await createRes.text().catch(() => "");
+      console.error(JSON.stringify({ event: "clickup_doc_create_error", status: createRes.status, body: errorBody }));
+      const errorData = errorBody ? (() => { try { return JSON.parse(errorBody); } catch { return {}; } })() : {};
+      return { error: `ClickUp Doc creation failed (${createRes.status}): ${errorData.err ?? createRes.statusText}` };
+    }
+
+    const docData = await createRes.json();
+    return { id: docData.id };
+  }
+
   async deliver(
     payload: MeetingSummaryPayload,
     config: UserConnectorConfig
@@ -105,9 +162,19 @@ export class ClickUpConnector implements Connector {
     });
 
     try {
-      // Step 1: Create Doc
-      const docRes = await fetch(
-        `https://api.clickup.com/api/v3/workspaces/${workspace_id}/docs`,
+      // ClickUp v3 parent types: 4=space, 5=folder
+      const parentId = folder_id || space_id;
+      const parentType = folder_id ? 5 : 4;
+
+      // Step 1: Find or create the shared "Meeting Summaries" doc
+      const docResult = await this.findOrCreateDoc(workspace_id, parentId, parentType, accessToken);
+      if ("error" in docResult) {
+        return { success: false, connectorId: this.id, error: docResult.error };
+      }
+
+      // Step 2: Add this meeting as a page
+      const pageRes = await fetch(
+        `https://api.clickup.com/api/v3/workspaces/${workspace_id}/docs/${docResult.id}/pages`,
         {
           method: "POST",
           headers: {
@@ -116,51 +183,18 @@ export class ClickUpConnector implements Connector {
           },
           body: JSON.stringify({
             name: `${payload.meetingTitle} — ${formattedDate}`,
-            parent: {
-              id: folder_id || space_id,
-              type: folder_id ? "folder" : "space",
-            },
-            visibility: "private",
-          }),
-        }
-      );
-
-      if (!docRes.ok) {
-        const errorData = await docRes.json().catch(() => ({}));
-        return {
-          success: false,
-          connectorId: this.id,
-          error: `ClickUp Doc creation failed (${docRes.status}): ${errorData.err ?? docRes.statusText}`,
-        };
-      }
-
-      const docData = await docRes.json();
-      const docId = docData.id;
-
-      // Step 2: Create Page with content
-      const pageRes = await fetch(
-        `https://api.clickup.com/api/v3/workspaces/${workspace_id}/docs/${docId}/pages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: accessToken,
-          },
-          body: JSON.stringify({
-            name: "Meeting Summary",
             content: markdown,
-            content_format: "markdown",
+            content_format: "text/md",
           }),
         }
       );
 
       if (!pageRes.ok) {
-        // Doc was created but page failed — still return the doc ID
         const errorData = await pageRes.json().catch(() => ({}));
         return {
           success: false,
           connectorId: this.id,
-          externalId: docId,
+          externalId: docResult.id,
           error: `ClickUp page creation failed (${pageRes.status}): ${errorData.err ?? pageRes.statusText}`,
         };
       }
@@ -168,7 +202,7 @@ export class ClickUpConnector implements Connector {
       return {
         success: true,
         connectorId: this.id,
-        externalId: docId,
+        externalId: docResult.id,
       };
     } catch (error) {
       return {

@@ -10,6 +10,24 @@ import {
 import type { MeetingSummaryPayload } from "@/lib/connectors/payload";
 import type { MeetingSummaryOutput } from "@/lib/ai/prompts/meeting-summary";
 
+function buildExternalUrl(
+  connectorId: string,
+  externalId?: string,
+  configJson?: Record<string, unknown> | null
+): string | undefined {
+  if (!externalId) return undefined;
+  switch (connectorId) {
+    case "clickup": {
+      const workspaceId = configJson?.workspace_id;
+      return workspaceId
+        ? `https://app.clickup.com/${workspaceId}/docs/${externalId}`
+        : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
 const providers: Record<string, () => DestinationProvider> = {
   DATABASE: () => new DatabaseProvider(),
   SLACK: () => new SlackProvider(),
@@ -88,7 +106,9 @@ export async function deliverToAllDestinations(
     }
   }
 
-  // Deliver to new connector destinations (Attio, ClickUp, etc.)
+  // Deliver to new connector destinations (ClickUp, etc.)
+  const { ensureConnectorsRegistered } = await import("@/lib/connectors/setup");
+  ensureConnectorsRegistered();
   const connectorConfigs = await getEnabledConnectorConfigs(userId);
   for (const connectorConfig of connectorConfigs) {
     // Skip connectors already handled by legacy system
@@ -121,20 +141,38 @@ export async function deliverToAllDestinations(
         nexusBaseUrl: process.env.NEXTAUTH_URL ?? "https://nexus.app",
       });
 
+      const { getConnectorTokens } = await import("@/lib/connectors/connector-auth");
+      const tokens = await getConnectorTokens(userId, connectorConfig.connectorId);
+
       const deliveryResult = await connector.deliver(fullPayload, {
         connectorId: connectorConfig.connectorId,
         enabled: connectorConfig.enabled,
         configJson: connectorConfig.configJson as Record<string, unknown> | null,
-        oauthTokens: null, // Tokens are loaded by connector internally
+        oauthTokens: tokens,
       });
 
       if (deliveryResult.success) {
         deliveredTo.push(connectorConfig.connectorId.toUpperCase());
+        const externalUrl = buildExternalUrl(
+          connectorConfig.connectorId,
+          deliveryResult.externalId,
+          connectorConfig.configJson as Record<string, unknown> | null
+        );
         await updateDeliveryLog(logEntry.id, {
           status: "DELIVERED",
           deliveredAt: new Date(),
+          externalUrl,
         });
       } else {
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "connector_delivery_failed",
+            userId,
+            connectorId: connectorConfig.connectorId,
+            error: deliveryResult.error,
+          })
+        );
         await updateDeliveryLog(logEntry.id, {
           status: "FAILED",
           errorMessage: deliveryResult.error ?? "Unknown error",
@@ -142,6 +180,15 @@ export async function deliverToAllDestinations(
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "connector_delivery_exception",
+          userId,
+          connectorId: connectorConfig.connectorId,
+          error: errorMsg,
+        })
+      );
       await updateDeliveryLog(logEntry.id, {
         status: "FAILED",
         errorMessage: errorMsg,

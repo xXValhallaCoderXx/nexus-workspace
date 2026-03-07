@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Shared Markdown Formatter (spec §3.4 note)
 // ──────────────────────────────────────────────
-// Both Attio and ClickUp accept markdown. This utility
+// ClickUp accepts markdown. This utility
 // transforms the canonical payload into a formatted summary.
 
 import type { MeetingSummaryPayload } from "./payload";
@@ -22,6 +22,9 @@ export function formatSummaryAsMarkdown(payload: MeetingSummaryPayload): string 
     lines.push(`**Duration:** ${payload.meetingDuration} minutes`);
   }
 
+  if (payload.sourceFileId) {
+    lines.push(`**Transcript:** [View in Google Drive](https://drive.google.com/file/d/${payload.sourceFileId}/view)`);
+  }
   lines.push(`**Source:** [View in Nexus](${payload.nexusUrl})`);
   lines.push("");
 

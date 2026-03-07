@@ -207,11 +207,9 @@ export function HistoryTable(props: {
 const destinationLabels: Record<string, string> = {
   DATABASE: "Nexus",
   SLACK: "Slack",
-  ATTIO: "Attio",
   CLICKUP: "ClickUp",
   nexus_history: "Nexus",
   slack: "Slack",
-  attio: "Attio",
   clickup: "ClickUp",
 };
 

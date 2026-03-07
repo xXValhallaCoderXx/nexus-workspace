@@ -126,7 +126,6 @@ export default async function DashboardPage() {
             />
             <HowItWorksBox />
             <ConnectorNudgeCard
-              hasCrmConnected={!!connectorStatusMap["attio"]}
               hasPmConnected={!!connectorStatusMap["clickup"]}
               meetingCount={stats.summariesReady}
               dismissed={config?.dismissedConnectorNudge ?? false}
