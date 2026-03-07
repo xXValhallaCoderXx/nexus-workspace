@@ -157,11 +157,14 @@ function SyncNowButton() {
       const res = await fetch("/api/user/triage/trigger", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
+        const parts: string[] = [];
+        if (data.fetchedFromSlack > 0)
+          parts.push(`Fetched ${data.fetchedFromSlack} from Slack`);
+        if (data.messageCount > 0)
+          parts.push(`Processed ${data.messageCount} message${data.messageCount === 1 ? "" : "s"}`);
         setResult({
-          message: data.messageCount > 0
-            ? `Processed ${data.messageCount} message${data.messageCount === 1 ? "" : "s"}`
-            : "No pending mentions",
-          ok: true,
+          message: parts.length > 0 ? parts.join(" · ") : (data.message ?? "No mentions found"),
+          ok: data.messageCount > 0 || data.fetchedFromSlack > 0,
         });
       } else {
         setResult({ message: data.error ?? "Failed", ok: false });

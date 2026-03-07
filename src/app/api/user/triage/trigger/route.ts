@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { getPendingNotificationsByUser } from "@/lib/db/scoped-queries";
+import {
+  getPendingNotificationsByUser,
+  getDestinationConnection,
+  createPendingNotification,
+} from "@/lib/db/scoped-queries";
 import { processUserDigest } from "@/lib/workflows/process-digest";
+import { fetchRecentMentions } from "@/lib/sources/slack/fetch-mentions";
 
 export async function POST() {
   const session = await getSession();
@@ -11,13 +16,53 @@ export async function POST() {
 
   const userId = session.user.id;
 
+  // ── Step 1: Pull recent mentions from Slack ──
+  let fetchedFromSlack = 0;
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  const slackConn = await getDestinationConnection(userId, "SLACK");
+
+  if (slackConn?.externalAccountId && botToken) {
+    const mentions = await fetchRecentMentions(
+      slackConn.externalAccountId,
+      botToken
+    );
+
+    for (const mention of mentions) {
+      try {
+        await createPendingNotification({
+          userId,
+          connectorId: "slack",
+          externalMessageId: `${mention.channelId}:${mention.messageTs}`,
+          authorName: mention.authorName,
+          content: mention.content,
+          metadata: {
+            channel: mention.channelId,
+            channelName: mention.channelName,
+            ts: mention.messageTs,
+            threadTs: mention.threadTs,
+            permalink: mention.permalink,
+          },
+        });
+        fetchedFromSlack++;
+      } catch (error: unknown) {
+        const prismaError = error as { code?: string };
+        if (prismaError.code !== "P2002") throw error; // skip duplicates
+      }
+    }
+  }
+
+  // ── Step 2: Process all pending notifications ──
   const notifications = await getPendingNotificationsByUser(userId);
 
   if (notifications.length === 0) {
     return NextResponse.json({
       success: true,
       messageCount: 0,
-      message: "No pending notifications to process",
+      fetchedFromSlack,
+      message:
+        fetchedFromSlack === 0
+          ? "No mentions found. Make sure the Nexus bot is added to channels where you're @mentioned."
+          : "Fetched mentions but they were already processed",
     });
   }
 
@@ -34,6 +79,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       messageCount: result.messageCount,
+      fetchedFromSlack,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
