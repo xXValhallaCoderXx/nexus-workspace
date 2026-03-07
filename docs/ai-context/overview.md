@@ -38,11 +38,20 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 ## Directory Structure
 
 ### `src/app/` — Next.js App Router pages & API routes
+- `page.tsx` — Root home/login page: redirects authenticated users to `/dashboard`, shows SignInButton otherwise
+- `layout.tsx` — Root layout: wraps app in SessionProvider, loads Inter font, sets metadata
+- `dashboard/layout.tsx` — Dashboard shell: Sidebar + Topbar + scrollable content area
 - `dashboard/page.tsx` — Main dashboard: KPI cards, RecentMeetingsPanel, ConnectionsPanel, WorkflowsPanel, ConnectorNudgeCard
 - `dashboard/notes/page.tsx` — Dedicated page for browsing Google Drive transcripts (DriveFilesPanel)
 - `dashboard/history/page.tsx` — Paginated job history with filters, multi-destination pill badges
 - `dashboard/settings/page.tsx` — User settings (connections, destinations, workflows, API key, model context)
 - `dashboard/settings/clickup-config-modal.tsx` — ClickUp configuration modal (workspace → space → folder → save)
+- `dashboard/settings/settings-connections.tsx` — Manage Google/Slack/ClickUp connections + re-register push channel
+- `dashboard/settings/settings-destination.tsx` — Toggle output destinations (Slack DM, ClickUp, Nexus History)
+- `dashboard/settings/settings-workflows.tsx` — Toggle auto-summarization & Slack/ClickUp notifications
+- `dashboard/settings/settings-api-key.tsx` — Manage OpenRouter API key (optional BYOK for LLM processing)
+- `dashboard/settings/settings-model-context.tsx` — Customize meeting summarization system prompt
+- `api/channels/register/` — Registers Google Drive push channel for the authenticated user
 - `api/user/drive/files/` — Lists transcript files from Google Drive with job status
 - `api/user/drive/trigger/` — Manually triggers transcript processing (also used for retries)
 - `api/user/jobs/` — Paginated job history API
@@ -64,20 +73,22 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 - `ui/` — Reusable primitives: Card, Modal, FilterChip, SearchInput, StatusBadge, KpiCard, ToggleSwitch, InfoBox
 - `layout/` — Sidebar, Topbar, PageHeader
 - `auth/` — SignInButton, SignOutButton, UserAvatar
+- `providers/` — SessionProvider wrapper for client-side session management
 
 ### `src/lib/` — Server-side logic
-- `ai/` — OpenRouter client, meeting processing pipeline, Zod schemas for AI output, prompt templates
+- `ai/` — OpenRouter client (`openrouter-client.ts`), meeting processing pipeline (`process-meeting.ts`), prompt templates + Zod schemas colocated in `prompts/meeting-summary.ts`
 - `auth/` — NextAuth config, session helpers, route guard
 - `connectors/` — **Connector framework** (see Connector Architecture below)
 - `crypto/` — AES encryption for user API keys and OAuth tokens
 - `db/` — Prisma client singleton, scoped query functions (all user-scoped with userId in WHERE)
 - `destinations/` — Legacy output routing: DestinationProvider interface, DatabaseProvider, SlackProvider, slack-formatter; plus `deliverToAllDestinations()` which handles both legacy and connector destinations
-- `google/` — Drive API: channel registration, transcript fetching, webhook verification
+- `google/` — Drive API: channel registration, transcript fetching, webhook verification, authenticated Drive client factory (`get-drive-client.ts`)
 - `queue/` — QStash client, job enqueue helper, signature verification
 - `redis/` — Redis client, deduplication helpers
 - `utils/` — Shared utilities: `cleanMeetingTitle()` for parsing raw Google Meet filenames
 
 ### `src/lib/connectors/` — Connector Framework
+- `index.ts` — Barrel file: re-exports types, schemas, and utilities from the connector framework
 - `types.ts` — Connector interface contract: `Connector`, `AuthResult`, `ConnectionStatus`, `UserConnectorConfig`, `DeliveryResult`, `ConnectorConfigSchema`
 - `payload.ts` — Canonical `MeetingSummaryPayload` type (Zod schema) + `buildPayloadFromLegacy()` converter
 - `markdown-formatter.ts` — Shared `formatSummaryAsMarkdown()` used by ClickUp
@@ -89,11 +100,16 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 ### `src/hooks/` — Client-side hooks
 - `use-note-modal.ts` — Manages `?note=<jobId>` URL param for deep-linked note modal
 
-### `src/tests/connectors/` — Connector unit tests
-- `markdown-formatter.test.ts` — Markdown output formatting
-- `registry.test.ts` — Connector registration and lookup
-- `payload.test.ts` — Legacy-to-canonical payload conversion
-- `ui-helpers.test.ts` — Destination label mapping and string parsing
+### `src/tests/` — Test suite
+- `setup.ts` — Global test setup (Vitest)
+- `connectors/markdown-formatter.test.ts` — Markdown output formatting
+- `connectors/registry.test.ts` — Connector registration and lookup
+- `connectors/payload.test.ts` — Legacy-to-canonical payload conversion
+- `connectors/ui-helpers.test.ts` — Destination label mapping and string parsing
+- Empty placeholder directories exist for: `ai/`, `crypto/`, `destinations/`, `google/`, `redis/`, `webhooks/`
+
+### `src/types/` — TypeScript type extensions
+- `next-auth.d.ts` — Extends NextAuth Session interface to include `user.id`
 
 ### `src/generated/prisma/` — Auto-generated Prisma client (do not edit)
 
@@ -149,7 +165,7 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 - API routes check `getSession()` and return 401 if unauthenticated
 - Encrypted fields (API keys, webhooks, OAuth tokens) use AES via `src/lib/crypto/encryption.ts`
 - Generated Prisma client is at `src/generated/prisma/` — import types from `@/generated/prisma/`
-- CSS variables defined in `globals.css`: `--bg`, `--surface`, `--border`, `--brand`, `--brand-lt`, `--text`, `--muted`, `--muted2`, `--green`, `--amber`, `--red`
+- CSS variables defined in `globals.css`: `--bg`, `--surface`, `--surface2`, `--border`, `--border2`, `--brand`, `--brand-lt`, `--brand-md`, `--text`, `--muted`, `--muted2`, `--green`, `--green-lt`, `--amber`, `--amber-lt`, `--red`, `--red-lt`, `--shadow`, `--shadow-md`. Tailwind mappings use `--color-*` aliases.
 - No external UI component library — all components are hand-built with Tailwind
 - Push channel auto-renewal runs via Vercel cron every 6 hours, renewing channels expiring within 24 hours
 - Prisma JSON null handling: use `Prisma.JsonNull` instead of raw `null` for JSON columns in upserts
