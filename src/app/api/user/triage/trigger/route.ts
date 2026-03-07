@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/scoped-queries";
 import { processUserDigest } from "@/lib/workflows/process-digest";
 import { fetchRecentMentions } from "@/lib/sources/slack/fetch-mentions";
+import { decrypt } from "@/lib/crypto/encryption";
 
 export async function POST() {
   const session = await getSession();
@@ -16,15 +17,18 @@ export async function POST() {
 
   const userId = session.user.id;
 
-  // ── Step 1: Pull recent mentions from Slack ──
+  // ── Step 1: Pull recent mentions from Slack via search.messages ──
   let fetchedFromSlack = 0;
-  const botToken = process.env.SLACK_BOT_TOKEN;
   const slackConn = await getDestinationConnection(userId, "SLACK");
 
-  if (slackConn?.externalAccountId && botToken) {
+  if (slackConn?.externalAccountId && slackConn.oauthTokensEncrypted) {
+    const { access_token } = JSON.parse(
+      decrypt(slackConn.oauthTokensEncrypted)
+    ) as { access_token: string };
+
     const mentions = await fetchRecentMentions(
       slackConn.externalAccountId,
-      botToken
+      access_token
     );
 
     for (const mention of mentions) {
@@ -61,7 +65,7 @@ export async function POST() {
       fetchedFromSlack,
       message:
         fetchedFromSlack === 0
-          ? "No mentions found. Make sure the Nexus bot is added to channels where you're @mentioned."
+          ? "No mentions found. Re-connect Slack in Settings to grant search access."
           : "Fetched mentions but they were already processed",
     });
   }

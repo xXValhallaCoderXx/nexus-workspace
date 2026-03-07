@@ -14,14 +14,13 @@ export async function GET() {
   const state = createOAuthState(session.user.id);
 
   const params = new URLSearchParams({
-    response_type: "code",
     client_id: process.env.SLACK_CLIENT_ID!,
-    scope: "openid profile email",
+    user_scope: "search:read",
     redirect_uri: buildOAuthRedirectUri("SLACK", "/api/auth/slack/callback"),
     state,
   });
 
   return NextResponse.redirect(
-    `https://slack.com/openid/connect/authorize?${params.toString()}`
+    `https://slack.com/oauth/v2/authorize?${params.toString()}`
   );
 }

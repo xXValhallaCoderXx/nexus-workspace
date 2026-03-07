@@ -6,6 +6,7 @@ import {
   verifyOAuthState,
   getAppBaseUrl,
 } from "@/lib/auth/oauth-helpers";
+import { encrypt } from "@/lib/crypto/encryption";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -39,8 +40,8 @@ export async function GET(request: Request) {
     );
   }
 
-  // Exchange code for tokens via Slack's OpenID Connect token endpoint
-  const tokenRes = await fetch("https://slack.com/api/openid.connect.token", {
+  // Exchange code for tokens via Slack OAuth V2
+  const tokenRes = await fetch("https://slack.com/api/oauth.v2.access", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -67,19 +68,10 @@ export async function GET(request: Request) {
     );
   }
 
-  // User ID is inside the id_token JWT — decode the payload
-  let slackUserId: string | undefined;
-  if (tokenData.id_token) {
-    try {
-      const [, payloadB64] = tokenData.id_token.split(".");
-      const claims = JSON.parse(
-        Buffer.from(payloadB64, "base64url").toString()
-      );
-      slackUserId = claims["https://slack.com/user_id"] ?? claims.sub;
-    } catch {
-      // fall through to error
-    }
-  }
+  // OAuth V2 returns authed_user with id + access_token
+  const slackUserId: string | undefined = tokenData.authed_user?.id;
+  const userAccessToken: string | undefined =
+    tokenData.authed_user?.access_token;
 
   if (!slackUserId) {
     return NextResponse.redirect(
@@ -87,12 +79,24 @@ export async function GET(request: Request) {
     );
   }
 
+  // Encrypt the user token for storage (used for search.messages API)
+  const encryptedTokens = userAccessToken
+    ? encrypt(
+        JSON.stringify({
+          access_token: userAccessToken,
+          scope: tokenData.authed_user?.scope,
+        })
+      )
+    : null;
+
   // Store in DestinationConnection
   await upsertDestinationConnection(userId, "SLACK", {
     externalAccountId: slackUserId,
+    oauthTokensEncrypted: encryptedTokens,
     status: "CONNECTED",
     enabled: true,
     displayName: "Slack DM",
+    configJson: tokenData.team ? { teamId: tokenData.team.id } : null,
   });
 
   return NextResponse.redirect(
