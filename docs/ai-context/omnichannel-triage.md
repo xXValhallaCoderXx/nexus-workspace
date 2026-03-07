@@ -2,7 +2,7 @@
 
 ## Overview
 
-When a user enables **Quiet Mode**, Slack @mentions are batched into a triage digest instead of generating real-time notifications. An LLM classifies each message as ACTION_REQUIRED, READ_ONLY, or NOISE, and the digest is delivered to all enabled destinations.
+When a user enables **Quiet Mode**, Slack @mentions are batched into a triage digest instead of generating real-time notifications. An LLM classifies each message as ACTION_REQUIRED, READ_ONLY, or NOISE, and the digest is delivered to all enabled destinations. Recent digests also power the dedicated `/dashboard/mentions` workspace.
 
 ## Data Flow
 
@@ -28,6 +28,8 @@ Delivery Planner (Nexus History + Slack DM + ClickUp)
       ▼
 PendingNotifications deleted
 ```
+
+`PendingNotification` rows are queue-only: they are unclassified before processing and removed after the digest run completes. The Mentions workspace is therefore built from stored triage digest artifact payloads rather than from the live pending queue.
 
 ## Ingestion: Push Path (Webhooks)
 
@@ -137,6 +139,15 @@ Appears next to the Quiet Mode toggle when enabled. Calls `POST /api/user/triage
 ### Note Detail Modal
 `NoteDetailModal` detects `DIGEST` artifacts via `isDigestPayload()` type guard. Renders 3 collapsible sections (ACTION_REQUIRED, READ_ONLY, NOISE) with message content, author, channel, and permalink links.
 
+### Mentions Workspace
+Route: `/dashboard/mentions`
+
+- Server page loads Slack connection state, Quiet Mode state, pending queue count, and recent `SCHEDULED_DIGEST` runs
+- Recent digest artifact payloads are flattened into individual mention cards for the list view
+- `MentionsBoard` provides client-side search, category filters, queue/process status, and a manual process button wired to `POST /api/user/triage/trigger`
+- `MentionDetailPanel` opens as a right-side panel via `?mention=<messageId>` and shows the AI reason, source context, permalink, and digest delivery status
+- `mention-display.ts` centralizes category metadata, source metadata, Slack text cleanup, mention titles, previews, and search matching
+
 ## Rate Limiting & Data Controls
 
 | Control | Value | Implemented In |
@@ -164,3 +175,7 @@ Appears next to the Quiet Mode toggle when enabled. Calls `POST /api/user/triage
 | `src/app/api/cron/process-triage-digest/route.ts` | Cron batch processor |
 | `src/app/api/auth/slack/route.ts` | Slack OAuth V2 initiation |
 | `src/app/api/auth/slack/callback/route.ts` | Slack OAuth V2 callback |
+| `src/app/dashboard/mentions/page.tsx` | Mentions workspace server page that loads queue state and recent digest runs |
+| `src/components/dashboard/mentions-board.tsx` | Mentions list UI with search, category filters, and process action |
+| `src/components/dashboard/mention-detail-panel.tsx` | Right-side detail panel for individual triaged mentions |
+| `src/lib/utils/mention-display.ts` | Mention formatting/search/category helpers used by the Mentions workspace |

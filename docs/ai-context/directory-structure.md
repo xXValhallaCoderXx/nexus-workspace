@@ -9,10 +9,11 @@
 - `onboarding/page.tsx` — Redirects to the persisted onboarding step
 - `onboarding/connect/page.tsx` — Workspace connection step (Google Drive sync, Slack, ClickUp)
 - `onboarding/configure/page.tsx` — Workflow setup step (meeting summaries, Slack DM, Quiet Mode, ClickUp config)
-- `dashboard/layout.tsx` — Dashboard shell: Sidebar + scrollable content, processing badge
+- `dashboard/layout.tsx` — Dashboard shell: Sidebar + scrollable content, processing + mentions badges
 - `dashboard/page.tsx` — Main dashboard: KPI cards, RecentMeetingsPanel, ConnectionsPanel, WorkflowsPanel, ConnectorNudgeCard
 - `dashboard/notes/page.tsx` — Browse Google Drive transcripts (DriveFilesPanel)
-- `dashboard/history/page.tsx` — Paginated workflow run history with filters
+- `dashboard/history/page.tsx` — Meetings workspace (route remains `/dashboard/history`) with paginated workflow run history and filters
+- `dashboard/mentions/page.tsx` — Mentions workspace for triaged Slack activity from recent digest runs
 - `dashboard/settings/page.tsx` — User settings hub
 
 ### Settings Components
@@ -34,7 +35,7 @@
 - `api/user/delivery/[id]/retry/` — Retry a failed artifact delivery
 - `api/user/alerts/acknowledge/` — Acknowledge channel renewal alerts
 - `api/user/connectors/clickup/` — ClickUp proxy APIs: `workspaces/`, `spaces/`, `folders/`, `config/`
-- `api/user/triage/trigger/` — Manual triage sync: pulls Slack mentions via `search.messages`, creates PendingNotifications, processes digest
+- `api/user/triage/trigger/` — Manual triage sync: pulls Slack mentions via `search.messages`, creates PendingNotifications, and processes the digest
 
 ### Webhook Routes
 - `api/webhooks/google-drive/` — Google Drive push notifications → SourceEvent/SourceItem creation
@@ -55,10 +56,10 @@
 
 ## `src/components/` — React components
 
-- `dashboard/` — RecentMeetingsPanel, DriveFilesPanel, HistoryTable, HistoryFilterBar, ConnectionsPanel, WorkflowsPanel, NoteDetailModal, AlertBanner, HowItWorksBox, ConnectorNudgeCard, FirstDeliveryBadge
+- `dashboard/` — RecentMeetingsPanel, DriveFilesPanel, HistoryTable, HistoryFilterBar, MentionsBoard, MentionDetailPanel, MentionCategoryBadge, MentionSourceAvatar, `workflow-run-primitives.tsx`, ConnectionsPanel, WorkflowsPanel, NoteDetailModal, AlertBanner, HowItWorksBox, ConnectorNudgeCard, FirstDeliveryBadge
 - `onboarding/` — Shared onboarding shell plus connect/configure step UIs
 - `ui/` — Card, Modal, FilterChip, SearchInput, StatusBadge, KpiCard, ToggleSwitch, InfoBox
-- `layout/` — Sidebar, Topbar, PageHeader
+- `layout/` — Sidebar, Topbar, PageHeader (`sidebar.tsx` drives Dashboard / Notes / Meetings / Mentions / Settings navigation and badge counts)
 - `auth/` — SignInButton, SignOutButton, UserAvatar
 - `providers/` — SessionProvider wrapper
 
@@ -78,7 +79,7 @@
 
 ### `db/`
 - `prisma.ts` — Prisma client singleton
-- `scoped-queries.ts` — All user-scoped DB helpers (userId in WHERE). Functions for: UserConfig, DestinationConnection, WorkflowRun, Artifact, ArtifactDelivery, PendingNotification CRUD, onboarding state persistence
+- `scoped-queries.ts` — All user-scoped DB helpers (userId in WHERE). Functions for: UserConfig, DestinationConnection, WorkflowRun, Artifact, ArtifactDelivery, recent triage digest queries, PendingNotification CRUD/counts, onboarding state persistence
 
 ### `onboarding/`
 - `state.ts` — One-time onboarding helper logic: route step mapping, completion checks, redirect path helper
@@ -111,10 +112,13 @@ See [Destinations](./destinations.md).
 - `process-digest.ts` — Shared triage digest processing: LLM classification → formatting → delivery (used by cron and manual trigger)
 
 ### `utils/`
+- `workflow-run-display.ts` — Shared workflow payload types, type guards, delivery/preview helpers, and date formatting for meetings and digests
+- `mention-display.ts` — Mention list types, category/source metadata, Slack message formatting, title/preview/search helpers
 - `cleanMeetingTitle()` — Parses raw Google Meet filenames
 
 ## `src/hooks/`
 - `use-note-modal.ts` — Manages `?note=<runId>` URL param for deep-linked modal
+- `use-mention-panel.ts` — Manages `?mention=<messageId>` URL param for the Mentions detail side panel
 
 ## `src/tests/`
 - `setup.ts` — Global Vitest setup

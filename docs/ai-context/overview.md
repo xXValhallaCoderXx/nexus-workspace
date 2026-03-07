@@ -5,7 +5,7 @@
 
 ## What It Is
 
-Nexus is a **Meeting Intelligence** app that automatically captures Google Meet transcripts from Google Drive, processes them with AI (via OpenRouter), and delivers structured summaries to multiple configurable destinations. It also includes an **Omnichannel Triage Digest** pipeline that batches Slack @mentions into AI-classified digests, plus a guided **first-run onboarding flow** for login, workspace connections, and workflow setup.
+Nexus is a **Meeting Intelligence** app that automatically captures Google Meet transcripts from Google Drive, processes them with AI (via OpenRouter), and delivers structured summaries to multiple configurable destinations. It also includes an **Omnichannel Triage Digest** pipeline that batches Slack @mentions into AI-classified digests, a dedicated **Mentions** workspace for browsing triaged Slack activity, plus a guided **first-run onboarding flow** for login, workspace connections, and workflow setup.
 
 ## Related Docs
 
@@ -47,6 +47,7 @@ See [Omnichannel Triage](./omnichannel-triage.md) for the full pipeline. Summary
 2. **Push path**: Slack Events API webhook at `/api/webhooks/connectors/slack` ingests `app_mention` events → stores `PendingNotification` records
 3. **Pull path**: "Sync Now" button triggers `/api/user/triage/trigger` → uses Slack `search.messages` API to fetch recent @mentions → stores + processes
 4. Processing: LLM classifies messages as ACTION_REQUIRED / READ_ONLY / NOISE → formats digest → delivers to all enabled destinations
+5. Processed `PendingNotification` rows are deleted after digestion; per-message category/reason data remains in triage digest artifact payloads, which power the `/dashboard/mentions` workspace
 
 ## OAuth & Redirect URL Handling
 
@@ -117,10 +118,12 @@ Implemented in:
 
 ## UX Patterns
 
-- **Note viewing**: Universal modal pattern — clicking any "Ready" item opens `NoteDetailModal` via `?note=<runId>` URL param
+- **Meeting/digest viewing**: Clicking any "Ready" workflow item opens `NoteDetailModal` as a right-side detail panel via `?note=<runId>`
+- **Mentions workspace**: `/dashboard/mentions` lists recent triaged Slack messages from digest artifacts, supports client-side search/category filtering, and opens `MentionDetailPanel` via `?mention=<messageId>`
 - **Onboarding**: New users see a one-time onboarding flow after Google sign-in. They can skip from either step, and skip marks onboarding complete so future visits land directly on the dashboard.
 - **Delivery retry**: Failed deliveries have per-destination retry buttons in the modal
 - **Title cleanup**: Raw Google Drive filenames cleaned via `cleanMeetingTitle()` before display
 - **Connector nudge card**: Promotional card on dashboard after 3+ meetings when ClickUp not connected
-- **Filtering**: History uses server-side filtering (URL params); Notes uses client-side filtering
+- **Filtering**: Meetings uses server-side filtering (URL params); Notes and Mentions use client-side filtering
+- **Workspace navigation**: Sidebar routes are Dashboard, Notes, Meetings, Mentions, and Settings, with badges for processing workflow runs and queued mentions
 - **Status badges**: Consistent `StatusBadge` component: ready/processing/pending/failed/connected/active/expired
