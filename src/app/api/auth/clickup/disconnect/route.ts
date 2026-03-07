@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { deleteConnectorConfig } from "@/lib/db/scoped-queries";
+import { deleteDestinationConnection } from "@/lib/db/scoped-queries";
 
 export async function POST() {
   const session = await getSession();
@@ -8,8 +8,7 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // ClickUp tokens don't support server-side revocation — just delete config
-  await deleteConnectorConfig(session.user.id, "clickup");
+  await deleteDestinationConnection(session.user.id, "CLICKUP");
 
   return NextResponse.json({ success: true });
 }

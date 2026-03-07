@@ -1,18 +1,28 @@
-import type { MeetingSummaryOutput } from "@/lib/ai/prompts/meeting-summary";
-import type { DestinationProvider, DeliveryResult } from "./types";
+import type {
+  DestinationProviderContract,
+  ArtifactForDelivery,
+  DestinationConfig,
+  DeliveryResult,
+} from "./types";
 import { formatSlackBlocks } from "./slack-formatter";
-import { getUserConfig } from "@/lib/db/scoped-queries";
 
-export class SlackProvider implements DestinationProvider {
+export class SlackDestinationProvider implements DestinationProviderContract {
+  readonly provider = "SLACK" as const;
+
+  validateConfig(config: DestinationConfig): boolean {
+    return !!config.externalAccountId;
+  }
+
   async deliver(
-    payload: MeetingSummaryOutput,
-    userId: string
+    artifact: ArtifactForDelivery,
+    config: DestinationConfig,
+    _userId: string
   ): Promise<DeliveryResult> {
-    const config = await getUserConfig(userId);
-    if (!config?.slackUserId) {
+    const slackUserId = config.externalAccountId;
+    if (!slackUserId) {
       return {
         success: false,
-        destinationName: "SLACK",
+        provider: this.provider,
         error: "Slack not connected — visit Settings to connect your account",
       };
     }
@@ -21,12 +31,38 @@ export class SlackProvider implements DestinationProvider {
     if (!botToken) {
       return {
         success: false,
-        destinationName: "SLACK",
+        provider: this.provider,
         error: "SLACK_BOT_TOKEN environment variable is not configured",
       };
     }
 
-    const blocks = formatSlackBlocks(payload);
+    const payload = artifact.payloadJson as {
+      title?: string;
+      date?: string | null;
+      attendees?: string[];
+      summary?: string;
+      actionItems?: Array<{ owner: string; task: string; deadline?: string | null }>;
+      decisions?: string[];
+      followUps?: string[];
+    } | null;
+
+    if (!payload) {
+      return {
+        success: false,
+        provider: this.provider,
+        error: "No payload to deliver",
+      };
+    }
+
+    const blocks = formatSlackBlocks({
+      title: payload.title ?? artifact.title ?? "Meeting Summary",
+      date: payload.date ?? null,
+      attendees: payload.attendees ?? [],
+      summary: payload.summary ?? artifact.summaryText ?? "",
+      actionItems: payload.actionItems ?? [],
+      decisions: payload.decisions ?? [],
+      followUps: payload.followUps ?? [],
+    });
 
     let lastError: string | undefined;
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -37,8 +73,8 @@ export class SlackProvider implements DestinationProvider {
           Authorization: `Bearer ${botToken}`,
         },
         body: JSON.stringify({
-          channel: config.slackUserId,
-          text: `Meeting Summary: ${payload.title}`,
+          channel: slackUserId,
+          text: `Meeting Summary: ${artifact.title ?? "New Summary"}`,
           blocks,
         }),
       });
@@ -46,29 +82,17 @@ export class SlackProvider implements DestinationProvider {
       const data = await response.json();
 
       if (data.ok) {
-        return { success: true, destinationName: "SLACK" };
+        return { success: true, provider: this.provider };
       }
 
       lastError = `Slack API error: ${data.error ?? "unknown"}`;
-
-      // Only retry on transient errors
       if (data.error !== "ratelimited" && data.error !== "timeout") break;
     }
 
-    console.error(
-      JSON.stringify({
-        level: "error",
-        event: "slack_delivery_failed",
-        userId,
-        error: lastError,
-      })
-    );
-
     return {
       success: false,
-      destinationName: "SLACK",
+      provider: this.provider,
       error: lastError,
     };
   }
 }
-

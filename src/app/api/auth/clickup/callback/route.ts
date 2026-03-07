@@ -1,44 +1,45 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { upsertConnectorConfig } from "@/lib/db/scoped-queries";
+import { upsertDestinationConnection } from "@/lib/db/scoped-queries";
 import { encrypt } from "@/lib/crypto/encryption";
-import { cookies } from "next/headers";
+import {
+  buildOAuthRedirectUri,
+  verifyOAuthState,
+  getAppBaseUrl,
+} from "@/lib/auth/oauth-helpers";
 
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session?.user?.id) {
-    return NextResponse.redirect(
-      new URL("/?error=unauthenticated", request.url)
-    );
-  }
-
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
+  const appBase = getAppBaseUrl();
+
   if (error) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=clickup_denied", request.url)
+      new URL("/dashboard/settings?error=clickup_denied", appBase)
     );
   }
 
-  // CSRF check
-  const cookieStore = await cookies();
-  const savedState = cookieStore.get("clickup_oauth_state")?.value;
-  if (!state || state !== savedState) {
+  // Verify HMAC-signed state (works across domains — no cookie needed)
+  const stateResult = verifyOAuthState(state);
+  const session = await getSession();
+  const userId = session?.user?.id ?? stateResult?.userId;
+
+  if (!userId || !stateResult) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=clickup_state_mismatch", request.url)
+      new URL("/dashboard/settings?error=clickup_state_mismatch", appBase)
     );
   }
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=clickup_no_code", request.url)
+      new URL("/dashboard/settings?error=clickup_no_code", appBase)
     );
   }
 
-  // Exchange code for token — ClickUp uses query params for token exchange
+  // Exchange code for token
   const tokenParams = new URLSearchParams({
     client_id: process.env.CLICKUP_CLIENT_ID!,
     client_secret: process.env.CLICKUP_CLIENT_SECRET!,
@@ -57,31 +58,26 @@ export async function GET(request: Request) {
       JSON.stringify({
         level: "error",
         event: "clickup_oauth_token_exchange_failed",
-        userId: session.user.id,
+        userId,
         error: tokenData.err ?? tokenRes.statusText,
       })
     );
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=clickup_token_failed", request.url)
+      new URL("/dashboard/settings?error=clickup_token_failed", appBase)
     );
   }
 
-  // ClickUp tokens don't expire but can be revoked
   const encryptedTokens = encrypt(
-    JSON.stringify({
-      access_token: tokenData.access_token,
-    })
+    JSON.stringify({ access_token: tokenData.access_token })
   );
 
-  await upsertConnectorConfig(session.user.id, "clickup", {
-    oauthTokens: encryptedTokens,
+  await upsertDestinationConnection(userId, "CLICKUP", {
+    oauthTokensEncrypted: encryptedTokens,
     status: "CONNECTED",
+    displayName: "ClickUp",
   });
 
-  const response = NextResponse.redirect(
-    new URL("/dashboard/settings?connected=clickup", request.url)
+  return NextResponse.redirect(
+    new URL("/dashboard/settings?connected=clickup", appBase)
   );
-  response.cookies.set("clickup_oauth_state", "", { maxAge: 0, path: "/" });
-
-  return response;
 }

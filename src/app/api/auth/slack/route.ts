@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { randomBytes } from "crypto";
+import {
+  buildOAuthRedirectUri,
+  createOAuthState,
+} from "@/lib/auth/oauth-helpers";
 
 export async function GET() {
   const session = await getSession();
@@ -8,28 +11,17 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const state = randomBytes(16).toString("hex");
+  const state = createOAuthState(session.user.id);
 
   const params = new URLSearchParams({
     response_type: "code",
     client_id: process.env.SLACK_CLIENT_ID!,
     scope: "openid profile email",
-    redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/slack/callback`,
+    redirect_uri: buildOAuthRedirectUri("SLACK", "/api/auth/slack/callback"),
     state,
   });
 
-  const response = NextResponse.redirect(
+  return NextResponse.redirect(
     `https://slack.com/openid/connect/authorize?${params.toString()}`
   );
-
-  // Short-lived CSRF cookie — verified in callback
-  response.cookies.set("slack_oauth_state", state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 10, // 10 minutes
-    path: "/",
-  });
-
-  return response;
 }

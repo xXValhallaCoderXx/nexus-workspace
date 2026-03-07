@@ -33,7 +33,6 @@ interface JobResponse {
   errorMessage: string | null;
   createdAt: string;
   completedAt: string | null;
-  destinationDelivered?: string | null;
   deliveryLogs?: DeliveryLogEntry[];
 }
 
@@ -68,14 +67,12 @@ export function NoteDetailModal({
     }
   }
 
-  // Reset state when jobId changes to null (modal closed)
   if (!jobId && fetchedId) {
     setFetchedId(null);
     setJob(null);
     setError(null);
   }
 
-  // Fetch when a new jobId is provided
   if (jobId && jobId !== fetchedId && !loading) {
     setFetchedId(jobId);
     setLoading(true);
@@ -146,7 +143,6 @@ export function NoteDetailModal({
 function SummaryView({ payload }: { payload: MeetingSummary }) {
   return (
     <div className="space-y-4 text-[13px]">
-      {/* Meta */}
       <div className="space-y-0.5">
         {payload.date && (
           <p className="text-xs text-muted2">{payload.date}</p>
@@ -158,7 +154,6 @@ function SummaryView({ payload }: { payload: MeetingSummary }) {
         )}
       </div>
 
-      {/* Summary */}
       <div>
         <h4 className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted2">
           Summary
@@ -168,7 +163,6 @@ function SummaryView({ payload }: { payload: MeetingSummary }) {
         </p>
       </div>
 
-      {/* Action Items */}
       {payload.actionItems.length > 0 && (
         <div>
           <h4 className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted2">
@@ -209,7 +203,6 @@ function SummaryView({ payload }: { payload: MeetingSummary }) {
         </div>
       )}
 
-      {/* Decisions */}
       {payload.decisions.length > 0 && (
         <div>
           <h4 className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted2">
@@ -223,7 +216,6 @@ function SummaryView({ payload }: { payload: MeetingSummary }) {
         </div>
       )}
 
-      {/* Follow-ups */}
       {payload.followUps.length > 0 && (
         <div>
           <h4 className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted2">
@@ -240,17 +232,16 @@ function SummaryView({ payload }: { payload: MeetingSummary }) {
   );
 }
 
-const connectorLabels: Record<string, string> = {
-  DATABASE: "Nexus History",
+const providerLabels: Record<string, string> = {
+  NEXUS_HISTORY: "Nexus History",
   SLACK: "Slack",
-  clickup: "ClickUp",
+  CLICKUP: "ClickUp",
 };
 
 function DeliverySection({ job }: { job: JobResponse }) {
   const [open, setOpen] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  // Build delivery items from both legacy field and delivery_log
   const items: Array<{
     id: string;
     connector: string;
@@ -266,32 +257,18 @@ function DeliverySection({ job }: { job: JobResponse }) {
       items.push({
         id: dl.id,
         connector: dl.connectorId,
-        label: connectorLabels[dl.connectorId] ?? dl.connectorId,
+        label: providerLabels[dl.connectorId] ?? dl.connectorId,
         status: dl.status === "DELIVERED" ? "delivered" : dl.status === "FAILED" ? "failed" : "pending",
         time: dl.deliveredAt,
         error: dl.errorMessage,
         externalUrl: dl.externalUrl ?? null,
       });
     }
-  } else if (job.destinationDelivered) {
-    // Fallback to legacy comma string
-    const parts = job.destinationDelivered.split(",").map((d) => d.trim()).filter(Boolean);
-    for (const p of parts) {
-      items.push({
-        id: p,
-        connector: p,
-        label: connectorLabels[p] ?? p,
-        status: "delivered",
-        time: job.completedAt,
-        error: null,
-        externalUrl: null,
-      });
-    }
   }
 
   if (items.length === 0) return null;
 
-  async function handleRetry(logId: string, connectorId: string) {
+  async function handleRetry(logId: string) {
     setRetryingId(logId);
     try {
       await fetch(`/api/user/delivery/${encodeURIComponent(logId)}/retry`, {
@@ -362,11 +339,11 @@ function DeliverySection({ job }: { job: JobResponse }) {
               </div>
               {item.status === "failed" && (
                 <button
-                  onClick={() => handleRetry(item.id, item.connector)}
+                  onClick={() => handleRetry(item.id)}
                   disabled={retryingId === item.id}
                   className="text-[11px] font-semibold text-brand hover:underline disabled:opacity-50"
                 >
-                  {retryingId === item.id ? "Retrying…" : "Retry"}
+                  {retryingId === item.id ? "Retrying..." : "Retry"}
                 </button>
               )}
             </div>

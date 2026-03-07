@@ -1,39 +1,41 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
-import { upsertUserConfig } from "@/lib/db/scoped-queries";
-import { cookies } from "next/headers";
+import { upsertDestinationConnection } from "@/lib/db/scoped-queries";
+import {
+  buildOAuthRedirectUri,
+  verifyOAuthState,
+  getAppBaseUrl,
+} from "@/lib/auth/oauth-helpers";
 
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session?.user?.id) {
-    return NextResponse.redirect(
-      new URL("/?error=unauthenticated", request.url)
-    );
-  }
-
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
+  const appBase = getAppBaseUrl();
+
   if (error) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_denied", request.url)
+      new URL("/dashboard/settings?error=slack_denied", appBase)
     );
   }
 
-  // CSRF check
-  const cookieStore = await cookies();
-  const savedState = cookieStore.get("slack_oauth_state")?.value;
-  if (!state || state !== savedState) {
+  // Verify HMAC-signed state (works across domains — no cookie needed)
+  const stateResult = verifyOAuthState(state);
+  // Also try session for same-domain flows
+  const session = await getSession();
+  const userId = session?.user?.id ?? stateResult?.userId;
+
+  if (!userId || !stateResult) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_state_mismatch", request.url)
+      new URL("/dashboard/settings?error=slack_state_mismatch", appBase)
     );
   }
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_no_code", request.url)
+      new URL("/dashboard/settings?error=slack_no_code", appBase)
     );
   }
 
@@ -45,7 +47,7 @@ export async function GET(request: Request) {
       code,
       client_id: process.env.SLACK_CLIENT_ID!,
       client_secret: process.env.SLACK_CLIENT_SECRET!,
-      redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/slack/callback`,
+      redirect_uri: buildOAuthRedirectUri("SLACK", "/api/auth/slack/callback"),
     }),
   });
 
@@ -56,31 +58,44 @@ export async function GET(request: Request) {
       JSON.stringify({
         level: "error",
         event: "slack_oauth_token_exchange_failed",
-        userId: session.user.id,
+        userId,
         error: tokenData.error,
       })
     );
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_token_failed", request.url)
+      new URL("/dashboard/settings?error=slack_token_failed", appBase)
     );
   }
 
-  // `sub` is the Slack User ID in the OpenID Connect response
-  const slackUserId: string = tokenData["https://slack.com/user_id"] ?? tokenData.sub;
+  // User ID is inside the id_token JWT — decode the payload
+  let slackUserId: string | undefined;
+  if (tokenData.id_token) {
+    try {
+      const [, payloadB64] = tokenData.id_token.split(".");
+      const claims = JSON.parse(
+        Buffer.from(payloadB64, "base64url").toString()
+      );
+      slackUserId = claims["https://slack.com/user_id"] ?? claims.sub;
+    } catch {
+      // fall through to error
+    }
+  }
 
   if (!slackUserId) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings?error=slack_no_user_id", request.url)
+      new URL("/dashboard/settings?error=slack_no_user_id", appBase)
     );
   }
 
-  await upsertUserConfig(session.user.id, { slackUserId });
+  // Store in DestinationConnection
+  await upsertDestinationConnection(userId, "SLACK", {
+    externalAccountId: slackUserId,
+    status: "CONNECTED",
+    enabled: true,
+    displayName: "Slack DM",
+  });
 
-  const response = NextResponse.redirect(
-    new URL("/dashboard/settings?connected=slack", request.url)
+  return NextResponse.redirect(
+    new URL("/dashboard/settings?connected=slack", appBase)
   );
-  // Clear the CSRF cookie
-  response.cookies.set("slack_oauth_state", "", { maxAge: 0, path: "/" });
-
-  return response;
 }

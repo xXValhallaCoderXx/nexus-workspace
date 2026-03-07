@@ -39,32 +39,16 @@ Details:
 - Nexus Business Light Version Overview: The team discussed the Nexus Business Light
   version, which is designed to be accessible without a sign-up or gate. Users can
   immediately start using the product by landing on the page and seeing "get started" only
-  requiring to connect their wallet for transactions. This user's journey will be limited based on
-  the connected wallet, allowing them to see paid details upon connecting the wallet.
-
-- Light Version Target Audience and Transition to Pro: The light version is intended for
-  "single player" users, such as freelancers who do not require extensive organizational
-  collaboration features. If users need organizational tools, collaborators, or workflows (like
-  BACS), they would transition to Nexus Business Pro, which will offer more sophisticated
-  features and another where it takes "three consumer friendly, more users, more inviting."
-
-- Two Design Approaches for Light Version: Prakeerthi Turner presented two ideas for the
-  light version's landing page. The first sticks closely to the current Pro version with all its
-  features and another where it takes 3 consumer friendly, more warm, more inviting.
-  The light version currently presented utilizes the second approach, which feels lighter with
-  an emphasis on the key destination being "pay, containing with the invite "negotiations over" tab
-  or the Pro version of Nexus."
+  requiring to connect their wallet for transactions.
 
 Action Items:
 - Sunny Singh: Reorganise the Receiver workflow to be connection-first by March 10.
 - Prakeerthi Turner: Update the light version wireframes based on feedback by March 7.
 - Renate Gouveia: Review the upselling flow from Light to Pro and provide feedback by March 6.
-- Sunny Singh: Align website copy updates for the March 18 launch.
 
 Decisions:
 - The light version will use the "consumer friendly" design approach (option 2).
 - Transaction history will be centralised with export functionality.
-- LiFi integration for swaps and bridges is out of scope for phase one.
 
 Follow-ups:
 - Renate will send the discussion summary regarding the new Tyke architecture.
@@ -83,28 +67,31 @@ async function main() {
   }
   console.log(`Using user: ${user.name} (${user.email})`);
 
-  // Clean up any stale PROCESSING jobs from previous test runs
-  const stale = await prisma.jobHistory.deleteMany({
+  // Clean up any stale PROCESSING runs from previous test runs
+  const stale = await prisma.workflowRun.deleteMany({
     where: {
       userId: user.id,
-      sourceFileId: "test-file-001",
+      workflowType: "MEETING_SUMMARY",
+      inputRefJson: { path: ["fileId"], equals: "test-file-001" },
       status: "PROCESSING",
     },
   });
   if (stale.count > 0) {
-    console.log(`Cleaned up ${stale.count} stale PROCESSING job(s) from previous runs`);
+    console.log(`Cleaned up ${stale.count} stale PROCESSING run(s) from previous runs`);
   }
 
-  // Create a pending job
-  const job = await prisma.jobHistory.create({
+  // Create a pending workflow run
+  const run = await prisma.workflowRun.create({
     data: {
       userId: user.id,
-      sourceFileId: "test-file-001",
-      sourceFileName: "GB V3 Sync — Meeting Transcript",
+      workflowType: "MEETING_SUMMARY",
+      triggerType: "MANUAL",
+      inputRefJson: { fileId: "test-file-001", fileName: "GB V3 Sync — Meeting Transcript" },
       status: "PROCESSING",
+      startedAt: new Date(),
     },
   });
-  console.log(`Created job: ${job.id}`);
+  console.log(`Created workflow run: ${run.id}`);
 
   // Call OpenRouter directly with the sample transcript
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -151,19 +138,28 @@ async function main() {
     console.log(`  - ${f}`);
   }
 
-  // Update the job record
-  await prisma.jobHistory.update({
-    where: { id: job.id },
+  // Create artifact and mark run completed
+  await prisma.artifact.create({
+    data: {
+      userId: user.id,
+      artifactType: "MEETING_SUMMARY",
+      workflowRunId: run.id,
+      title: parsed.title,
+      summaryText: parsed.summary,
+      payloadJson: parsed as object,
+    },
+  });
+
+  await prisma.workflowRun.update({
+    where: { id: run.id },
     data: {
       status: "COMPLETED",
-      resultPayload: parsed as object,
-      llmModel: response.model,
-      destinationDelivered: "DATABASE",
+      modelUsed: response.model,
       completedAt: new Date(),
     },
   });
 
-  console.log(`\nJob ${job.id} marked as COMPLETED. Check /dashboard/history to view it.`);
+  console.log(`\nRun ${run.id} marked as COMPLETED. Check /dashboard/history to view it.`);
   await prisma.$disconnect();
 }
 

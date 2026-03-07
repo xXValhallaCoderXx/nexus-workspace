@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/get-session";
 import { Sidebar } from "@/components/layout/sidebar";
-import { getProcessingJobCount } from "@/lib/db/scoped-queries";
+import { getProcessingRunCount } from "@/lib/db/scoped-queries";
 
 export default async function DashboardLayout({
   children,
@@ -13,7 +13,7 @@ export default async function DashboardLayout({
     redirect("/");
   }
 
-  const processingCount = await getProcessingJobCount(session.user.id);
+  const processingCount = await getProcessingRunCount(session.user.id);
 
   return (
     <div className="flex h-screen overflow-hidden">

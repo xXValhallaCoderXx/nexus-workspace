@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
 import { listTranscriptFiles } from "@/lib/google/fetch-transcript";
-import { getJobStatusByFileIds } from "@/lib/db/scoped-queries";
+import { getWorkflowRunStatusByFileIds } from "@/lib/db/scoped-queries";
 
 export async function GET() {
   const session = await getSession();
@@ -12,22 +12,24 @@ export async function GET() {
   try {
     const files = await listTranscriptFiles(session.user.id);
     const fileIds = files.map((f) => f.fileId);
-    const jobs = await getJobStatusByFileIds(session.user.id, fileIds);
+    const runs = await getWorkflowRunStatusByFileIds(session.user.id, fileIds);
 
-    // Build a map of fileId → most recent job (already ordered by createdAt desc)
-    const jobMap = new Map<string, { status: string; id: string }>();
-    for (const job of jobs) {
-      if (!jobMap.has(job.sourceFileId)) {
-        jobMap.set(job.sourceFileId, { status: job.status, id: job.id });
+    // Build a map of fileId -> most recent run status
+    const runMap = new Map<string, { status: string; id: string }>();
+    for (const run of runs) {
+      const inputRefs = run.inputRefJson as Record<string, unknown> | null;
+      const fileId = inputRefs?.fileId as string | undefined;
+      if (fileId && !runMap.has(fileId)) {
+        runMap.set(fileId, { status: run.status, id: run.id });
       }
     }
 
     const merged = files.map((f) => {
-      const job = jobMap.get(f.fileId);
+      const run = runMap.get(f.fileId);
       return {
         ...f,
-        jobStatus: job?.status ?? null,
-        jobId: job?.id ?? null,
+        jobStatus: run?.status ?? null,
+        jobId: run?.id ?? null,
       };
     });
 
