@@ -104,14 +104,19 @@ export function SettingsWorkflows({
           <div>
             <div className="text-[13px] font-medium text-text">Quiet Mode (Triage Digest)</div>
             <div className="mt-[2px] text-[11px] text-muted2">
-              Batch @mentions from Slack into a classified digest delivered at scheduled intervals instead of real-time pings
+              Batch @mentions from Slack into a classified digest delivered at scheduled intervals
             </div>
           </div>
-          <ToggleSwitch
-            enabled={isQuietMode}
-            onToggle={() => handleToggle("quietModeEnabled")}
-            disabled={loadingField !== null}
-          />
+          <div className="flex items-center gap-3">
+            {isQuietMode && (
+              <SyncNowButton />
+            )}
+            <ToggleSwitch
+              enabled={isQuietMode}
+              onToggle={() => handleToggle("quietModeEnabled")}
+              disabled={loadingField !== null}
+            />
+          </div>
         </div>
       )}
 
@@ -138,5 +143,51 @@ function StatusLabel({ active }: { active: boolean }) {
     >
       {active ? "Active" : "Inactive"}
     </span>
+  );
+}
+
+function SyncNowButton() {
+  const [syncing, setSyncing] = useState(false);
+  const [result, setResult] = useState<{ message: string; ok: boolean } | null>(null);
+
+  async function handleSync() {
+    setSyncing(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/user/triage/trigger", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setResult({
+          message: data.messageCount > 0
+            ? `Processed ${data.messageCount} message${data.messageCount === 1 ? "" : "s"}`
+            : "No pending mentions",
+          ok: true,
+        });
+      } else {
+        setResult({ message: data.error ?? "Failed", ok: false });
+      }
+    } catch {
+      setResult({ message: "Network error", ok: false });
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setResult(null), 4000);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {result && (
+        <span className={`text-[11px] ${result.ok ? "text-green" : "text-red"}`}>
+          {result.message}
+        </span>
+      )}
+      <button
+        onClick={handleSync}
+        disabled={syncing}
+        className="rounded-md border border-border bg-surface px-3 py-1 text-[11px] font-medium text-text transition-colors hover:bg-surface2 disabled:opacity-50"
+      >
+        {syncing ? "Syncing…" : "Sync Now"}
+      </button>
+    </div>
   );
 }
