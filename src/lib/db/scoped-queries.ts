@@ -350,6 +350,7 @@ export async function getRecentWorkflowRuns(userId: string, limit = 5) {
     include: {
       artifacts: {
         take: 1,
+        orderBy: { createdAt: "desc" },
         select: {
           id: true,
           title: true,
@@ -358,6 +359,38 @@ export async function getRecentWorkflowRuns(userId: string, limit = 5) {
             select: {
               provider: true,
               status: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
+export async function getRecentTriageDigestRuns(userId: string, limit = 12) {
+  return prisma.workflowRun.findMany({
+    where: {
+      userId,
+      workflowType: "SCHEDULED_DIGEST",
+      status: "COMPLETED",
+    },
+    include: {
+      artifacts: {
+        take: 1,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          payloadJson: true,
+          deliveries: {
+            select: {
+              provider: true,
+              status: true,
+              externalUrl: true,
+              deliveredAt: true,
+              errorMessage: true,
             },
           },
         },

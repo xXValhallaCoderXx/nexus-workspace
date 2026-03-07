@@ -1,10 +1,23 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 
-const navItems = [
+type BadgeKey = "processing" | "mentions";
+
+interface SidebarNavItem {
+  label: string;
+  href: string;
+  icon: ReactNode;
+  badgeKey?: BadgeKey;
+}
+
+const navItems: Array<{
+  section: string;
+  items: SidebarNavItem[];
+}> = [
   {
     section: "Overview",
     items: [
@@ -32,11 +45,25 @@ const navItems = [
       {
         label: "Meetings",
         href: "/dashboard/history",
-        showBadge: true,
+        badgeKey: "processing",
         icon: (
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="12" r="9" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+          </svg>
+        ),
+      },
+      {
+        label: "Mentions",
+        href: "/dashboard/mentions",
+        badgeKey: "mentions",
+        icon: (
+          <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 15 6.75 17.25A2.25 2.25 0 1 1 3.57 14.07L5.82 11.82M15 9l2.25-2.25a2.25 2.25 0 0 1 3.18 3.18L18.18 12.18M8.25 15.75 15.75 8.25"
+            />
           </svg>
         ),
       },
@@ -66,11 +93,17 @@ const navItems = [
 export function Sidebar({
   userName,
   processingCount,
+  mentionsCount,
 }: {
   userName?: string | null;
   processingCount?: number;
+  mentionsCount?: number;
 }) {
   const pathname = usePathname();
+  const badgeCounts = {
+    processing: processingCount ?? 0,
+    mentions: mentionsCount ?? 0,
+  } as const;
   const initials = userName
     ? userName
         .split(" ")
@@ -118,12 +151,12 @@ export function Sidebar({
               >
                 {item.icon}
                 {item.label}
-                {item.showBadge && processingCount ? (
-                  <span className="ml-auto rounded-full bg-brand px-1.5 py-[1px] text-[10px] font-bold text-white">
-                    {processingCount}
-                  </span>
-                ) : null}
-              </Link>
+                 {item.badgeKey && badgeCounts[item.badgeKey] > 0 ? (
+                   <span className="ml-auto rounded-full bg-brand px-1.5 py-[1px] text-[10px] font-bold text-white">
+                     {badgeCounts[item.badgeKey]}
+                   </span>
+                 ) : null}
+               </Link>
             );
           })}
         </div>

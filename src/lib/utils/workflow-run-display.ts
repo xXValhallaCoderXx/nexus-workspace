@@ -122,6 +122,39 @@ export function formatLongDateTime(iso: string) {
   })} · ${formatTime(iso)}`;
 }
 
+export function formatRelativeAge(iso: string) {
+  const date = new Date(iso);
+  if (!isValidDate(date)) return "Unknown time";
+
+  const diffSeconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const absDiffSeconds = Math.abs(diffSeconds);
+
+  if (absDiffSeconds < 60) {
+    return "Just now";
+  }
+
+  const formatter = new Intl.RelativeTimeFormat(undefined, {
+    numeric: "auto",
+  });
+
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+    ["year", 31_536_000],
+    ["month", 2_592_000],
+    ["week", 604_800],
+    ["day", 86_400],
+    ["hour", 3_600],
+    ["minute", 60],
+  ];
+
+  for (const [unit, secondsPerUnit] of units) {
+    if (absDiffSeconds >= secondsPerUnit) {
+      return formatter.format(Math.round(diffSeconds / secondsPerUnit), unit);
+    }
+  }
+
+  return "Just now";
+}
+
 export function truncateText(text: string, maxLength = 140) {
   const cleaned = text.replace(/\s+/g, " ").trim();
 
