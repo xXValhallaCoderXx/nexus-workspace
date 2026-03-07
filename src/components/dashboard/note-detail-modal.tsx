@@ -14,6 +14,36 @@ interface MeetingSummary {
   followUps: string[];
 }
 
+interface DigestMessage {
+  id: string;
+  author: string;
+  content: string;
+  source: string;
+  channel?: string;
+  permalink?: string;
+  category: "ACTION_REQUIRED" | "READ_ONLY" | "NOISE";
+  reason: string;
+}
+
+interface DigestPayload {
+  classifications: Array<{
+    id: string;
+    category: "ACTION_REQUIRED" | "READ_ONLY" | "NOISE";
+    reason: string;
+  }>;
+  messages: DigestMessage[];
+  blocks: Record<string, unknown>[];
+  digestTime: string;
+}
+
+function isDigestPayload(
+  payload: unknown
+): payload is DigestPayload {
+  if (!payload || typeof payload !== "object") return false;
+  const p = payload as Record<string, unknown>;
+  return Array.isArray(p.messages) && Array.isArray(p.classifications);
+}
+
 interface DeliveryLogEntry {
   id: string;
   connectorId: string;
@@ -29,7 +59,7 @@ interface JobResponse {
   sourceFileId: string;
   sourceFileName: string | null;
   status: string;
-  resultPayload: MeetingSummary | null;
+  resultPayload: MeetingSummary | DigestPayload | null;
   errorMessage: string | null;
   createdAt: string;
   completedAt: string | null;
@@ -93,13 +123,19 @@ export function NoteDetailModal({
       .finally(() => setLoading(false));
   }
 
-  const payload = job?.resultPayload as MeetingSummary | null;
+  const payload = job?.resultPayload ?? null;
+  const digest = isDigestPayload(payload) ? payload : null;
+  const meeting = !digest && payload ? (payload as MeetingSummary) : null;
+
+  const modalTitle = digest
+    ? `📬 Triage Digest — ${digest.digestTime}`
+    : meeting?.title ?? cleanMeetingTitle(job?.sourceFileName);
 
   return (
     <Modal
       open={!!jobId}
       onClose={onClose}
-      title={payload?.title ?? cleanMeetingTitle(job?.sourceFileName)}
+      title={modalTitle}
     >
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -107,9 +143,14 @@ export function NoteDetailModal({
         </div>
       ) : error ? (
         <div className="py-12 text-center text-sm text-red">{error}</div>
-      ) : payload ? (
+      ) : digest ? (
         <div className="space-y-4">
-          <SummaryView payload={payload} />
+          <DigestView payload={digest} />
+          {job && <DeliverySection job={job} />}
+        </div>
+      ) : meeting ? (
+        <div className="space-y-4">
+          <SummaryView payload={meeting} />
           {job && <DeliverySection job={job} />}
         </div>
       ) : job?.status === "FAILED" ? (
@@ -228,6 +269,132 @@ function SummaryView({ payload }: { payload: MeetingSummary }) {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+const categoryConfig = {
+  ACTION_REQUIRED: { emoji: "🔴", label: "Action Required", color: "red" },
+  READ_ONLY: { emoji: "📖", label: "Read Only", color: "amber" },
+  NOISE: { emoji: "🔇", label: "Noise", color: "muted2" },
+} as const;
+
+type Category = keyof typeof categoryConfig;
+
+function DigestView({ payload }: { payload: DigestPayload }) {
+  const grouped = { ACTION_REQUIRED: [], READ_ONLY: [], NOISE: [] } as Record<
+    Category,
+    DigestMessage[]
+  >;
+  for (const msg of payload.messages) {
+    grouped[msg.category]?.push(msg);
+  }
+
+  return (
+    <div className="space-y-5 text-[13px]">
+      {(["ACTION_REQUIRED", "READ_ONLY", "NOISE"] as const).map((cat) => {
+        const messages = grouped[cat];
+        if (messages.length === 0) return null;
+        const cfg = categoryConfig[cat];
+        return (
+          <DigestCategorySection
+            key={cat}
+            emoji={cfg.emoji}
+            label={cfg.label}
+            messages={messages}
+            defaultCollapsed={cat === "NOISE"}
+          />
+        );
+      })}
+      {payload.messages.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted2">
+          No messages in this digest
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DigestCategorySection({
+  emoji,
+  label,
+  messages,
+  defaultCollapsed,
+}: {
+  emoji: string;
+  label: string;
+  messages: DigestMessage[];
+  defaultCollapsed: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+
+  return (
+    <div>
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex w-full items-center gap-1.5 text-left text-xs font-bold uppercase tracking-wider text-muted2 hover:text-text transition-colors"
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className={`transition-transform ${collapsed ? "" : "rotate-90"}`}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span>
+          {emoji} {label} ({messages.length})
+        </span>
+      </button>
+      {!collapsed && (
+        <div className="mt-2 space-y-2">
+          {messages.map((msg) => (
+            <DigestMessageCard key={msg.id} message={msg} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DigestMessageCard({ message }: { message: DigestMessage }) {
+  const truncated =
+    message.content.length > 200
+      ? message.content.slice(0, 200) + "…"
+      : message.content;
+
+  return (
+    <div className="rounded-lg border border-border bg-bg px-3 py-2.5 space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[13px] font-semibold text-text">
+          {message.author}
+        </span>
+        <span className="shrink-0 text-[11px] text-muted2">
+          {message.source}
+          {message.channel ? ` · #${message.channel}` : ""}
+        </span>
+      </div>
+      <p className="whitespace-pre-wrap leading-relaxed text-text">
+        {truncated}
+      </p>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] italic text-muted2">
+          {message.reason}
+        </span>
+        {message.permalink && (
+          <a
+            href={message.permalink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-[11px] font-medium text-brand hover:underline"
+          >
+            View in Slack →
+          </a>
+        )}
+      </div>
     </div>
   );
 }

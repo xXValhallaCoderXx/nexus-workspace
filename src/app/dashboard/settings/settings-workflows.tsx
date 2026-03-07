@@ -11,25 +11,38 @@ type ConnectorStatusMap = Record<
 export function SettingsWorkflows({
   enabled,
   slackDmEnabled,
+  quietModeEnabled,
   hasSlackConnected,
   connectorStatus,
 }: {
   enabled: boolean;
   slackDmEnabled: boolean;
+  quietModeEnabled: boolean;
   hasSlackConnected: boolean;
   connectorStatus: ConnectorStatusMap;
 }) {
   const [isEnabled, setIsEnabled] = useState(enabled);
   const [isSlackDm, setIsSlackDm] = useState(slackDmEnabled);
+  const [isQuietMode, setIsQuietMode] = useState(quietModeEnabled);
   const [loadingField, setLoadingField] = useState<string | null>(null);
 
   const clickup = connectorStatus["clickup"];
   const clickupReady = clickup?.status === "CONNECTED" && clickup?.enabled && !!clickup?.configJson;
 
-  async function handleToggle(field: "meetingSummariesEnabled" | "slackDmEnabled") {
-    const isAutoSummarise = field === "meetingSummariesEnabled";
-    const currentValue = isAutoSummarise ? isEnabled : isSlackDm;
-    const newValue = !currentValue;
+  async function handleToggle(
+    field: "meetingSummariesEnabled" | "slackDmEnabled" | "quietModeEnabled",
+  ) {
+    const setterMap: Record<typeof field, (v: boolean) => void> = {
+      meetingSummariesEnabled: setIsEnabled,
+      slackDmEnabled: setIsSlackDm,
+      quietModeEnabled: setIsQuietMode,
+    };
+    const currentMap: Record<typeof field, boolean> = {
+      meetingSummariesEnabled: isEnabled,
+      slackDmEnabled: isSlackDm,
+      quietModeEnabled: isQuietMode,
+    };
+    const newValue = !currentMap[field];
 
     setLoadingField(field);
     try {
@@ -39,8 +52,7 @@ export function SettingsWorkflows({
         body: JSON.stringify({ [field]: newValue }),
       });
       if (res.ok) {
-        if (isAutoSummarise) setIsEnabled(newValue);
-        else setIsSlackDm(newValue);
+        setterMap[field](newValue);
       }
     } finally {
       setLoadingField(null);
@@ -81,6 +93,23 @@ export function SettingsWorkflows({
           <ToggleSwitch
             enabled={isSlackDm}
             onToggle={() => handleToggle("slackDmEnabled")}
+            disabled={loadingField !== null}
+          />
+        </div>
+      )}
+
+      {/* Quiet Mode toggle — only visible when Slack is connected */}
+      {hasSlackConnected && (
+        <div className="flex items-center justify-between border-t border-border py-[11px]">
+          <div>
+            <div className="text-[13px] font-medium text-text">Quiet Mode (Triage Digest)</div>
+            <div className="mt-[2px] text-[11px] text-muted2">
+              Batch @mentions from Slack into a classified digest delivered at scheduled intervals instead of real-time pings
+            </div>
+          </div>
+          <ToggleSwitch
+            enabled={isQuietMode}
+            onToggle={() => handleToggle("quietModeEnabled")}
             disabled={loadingField !== null}
           />
         </div>

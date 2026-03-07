@@ -11,6 +11,7 @@ import { cleanMeetingTitle } from "@/lib/utils/clean-meeting-title";
 
 interface Job {
   id: string;
+  workflowType: string;
   sourceFileId: string;
   sourceFileName: string | null;
   status: string;
@@ -26,6 +27,13 @@ const statusMap: Record<string, { variant: "ready" | "processing" | "failed" | "
   FAILED: { variant: "failed", label: "Failed" },
   PENDING: { variant: "pending", label: "Pending" },
 };
+
+function jobDisplayTitle(job: Job): string {
+  if (job.workflowType === "SCHEDULED_DIGEST") {
+    return job.sourceFileName ?? "📬 Triage Digest";
+  }
+  return cleanMeetingTitle(job.sourceFileName);
+}
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -71,9 +79,9 @@ function HistoryTableInner({
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <p className="text-sm font-medium text-text">No meetings found</p>
+        <p className="text-sm font-medium text-text">No runs found</p>
         <p className="mt-1 text-xs text-muted2">
-          Processed transcripts will appear here and be delivered to your connected destinations. Head to Notes to process your first transcript.
+          Processed transcripts and digests will appear here and be delivered to your connected destinations. Head to Notes to process your first transcript.
         </p>
         <Link
           href="/dashboard/notes"
@@ -92,7 +100,7 @@ function HistoryTableInner({
           <thead>
             <tr>
               <th className="border-b border-border bg-surface2 px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted2">
-                Meeting
+                Meeting / Digest
               </th>
               <th className="border-b border-border bg-surface2 px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted2">
                 Date
@@ -115,7 +123,7 @@ function HistoryTableInner({
                 >
                   <td className="border-b border-border px-4 py-3 text-[13px]">
                     <div className="font-semibold text-text">
-                      {cleanMeetingTitle(job.sourceFileName)}
+                      {jobDisplayTitle(job)}
                     </div>
                     {job.status === "FAILED" && job.errorMessage && (
                       <div className="mt-0.5 text-[11px] text-red">
@@ -131,7 +139,7 @@ function HistoryTableInner({
                   <td className="border-b border-border px-4 py-3">
                     <div className="flex items-center gap-2">
                       <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
-                      {job.status === "FAILED" && (
+                      {job.status === "FAILED" && job.workflowType === "MEETING_SUMMARY" && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

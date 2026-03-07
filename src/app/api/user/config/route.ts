@@ -15,6 +15,11 @@ const updateConfigSchema = z.object({
   openRouterApiKey: z.string().nullable().optional(),
   customSystemPrompt: z.string().nullable().optional(),
   dismissedConnectorNudge: z.boolean().optional(),
+  quietModeEnabled: z.boolean().optional(),
+  digestSchedule: z
+    .object({ times: z.array(z.string()), timezone: z.string() })
+    .nullable()
+    .optional(),
 });
 
 export async function GET() {
@@ -34,6 +39,8 @@ export async function GET() {
     hasOpenRouterKey: !!config?.encryptedOpenRouterKey,
     hasSlackConnected: slackConn?.status === "CONNECTED",
     customSystemPrompt: config?.customSystemPrompt ?? null,
+    quietModeEnabled: config?.quietModeEnabled ?? false,
+    digestSchedule: config?.digestSchedule ?? null,
   });
 }
 
@@ -64,6 +71,12 @@ export async function PATCH(request: Request) {
   }
   if (parsed.data.dismissedConnectorNudge !== undefined) {
     configData.dismissedConnectorNudge = parsed.data.dismissedConnectorNudge;
+  }
+  if (parsed.data.quietModeEnabled !== undefined) {
+    configData.quietModeEnabled = parsed.data.quietModeEnabled;
+  }
+  if (parsed.data.digestSchedule !== undefined) {
+    configData.digestSchedule = parsed.data.digestSchedule;
   }
 
   if (Object.keys(configData).length > 0) {

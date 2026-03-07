@@ -42,6 +42,7 @@ export default async function HistoryPage({
             const inputRefs = r.inputRefJson as Record<string, unknown> | null;
             return {
               id: r.id,
+              workflowType: r.workflowType,
               sourceFileId: (inputRefs?.fileId as string) ?? "",
               sourceFileName: (inputRefs?.fileName as string) ?? artifact?.title ?? null,
               status: r.status,
