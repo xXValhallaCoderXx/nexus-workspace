@@ -7,6 +7,7 @@ import type {
   ConnectionStatus,
   EventStatus,
   DeliveryStatus,
+  OnboardingStep,
 } from "@/generated/prisma/enums";
 
 // ── User Config ────────────────────────────
@@ -24,6 +25,8 @@ export async function upsertUserConfig(
     dismissedConnectorNudge?: boolean;
     quietModeEnabled?: boolean;
     digestSchedule?: Prisma.InputJsonValue;
+    onboardingStep?: OnboardingStep;
+    onboardingCompletedAt?: Date | null;
   }
 ) {
   return prisma.userConfig.upsert({

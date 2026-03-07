@@ -91,6 +91,8 @@ model UserConfig {
   dismissedConnectorNudge Boolean  @default(false)
   quietModeEnabled        Boolean  @default(false)
   digestSchedule          Json?    // e.g. { "times": ["12:00", "16:00"], "timezone": "America/New_York" }
+  onboardingStep          OnboardingStep @default(CONNECT_WORKSPACE)
+  onboardingCompletedAt   DateTime?      @default(now())
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -162,6 +164,11 @@ enum DeliveryStatus {
   DELIVERED
   FAILED
   SKIPPED
+}
+
+enum OnboardingStep {
+  CONNECT_WORKSPACE
+  CONFIGURE_WORKFLOWS
 }
 
 // ──────────────────────────────────────────────

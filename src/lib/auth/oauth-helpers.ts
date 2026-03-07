@@ -38,13 +38,23 @@ function getSecret(): string {
 
 /**
  * Create an HMAC-signed OAuth state token with the userId embedded.
- * Format: nonce:timestamp:userId:signature
+ * Format:
+ *   - legacy: nonce:timestamp:userId:signature
+ *   - current: nonce:timestamp:userId:returnToBase64Url:signature
  * Valid for 10 minutes.
  */
-export function createOAuthState(userId: string): string {
+export function createOAuthState(
+  userId: string,
+  options?: { returnTo?: string }
+): string {
   const nonce = randomBytes(16).toString("hex");
   const ts = Date.now().toString();
-  const payload = `${nonce}:${ts}:${userId}`;
+  const returnTo = options?.returnTo
+    ? Buffer.from(options.returnTo, "utf8").toString("base64url")
+    : null;
+  const payload = returnTo
+    ? `${nonce}:${ts}:${userId}:${returnTo}`
+    : `${nonce}:${ts}:${userId}`;
   const sig = createHmac("sha256", getSecret()).update(payload).digest("hex");
   return `${payload}:${sig}`;
 }
@@ -55,19 +65,25 @@ export function createOAuthState(userId: string): string {
  */
 export function verifyOAuthState(
   state: string | null
-): { userId: string } | null {
+): { userId: string; returnTo?: string } | null {
   if (!state) return null;
 
   const parts = state.split(":");
-  if (parts.length !== 4) return null;
+  if (parts.length !== 4 && parts.length !== 5) return null;
 
-  const [nonce, ts, userId, sig] = parts;
-  const payload = `${nonce}:${ts}:${userId}`;
+  const hasReturnTo = parts.length === 5;
+  const [nonce, ts, userId, maybeReturnTo, maybeSig] = parts;
+  const encodedReturnTo = hasReturnTo ? maybeReturnTo : undefined;
+  const sig = hasReturnTo ? maybeSig : maybeReturnTo;
+  const payload = hasReturnTo
+    ? `${nonce}:${ts}:${userId}:${encodedReturnTo}`
+    : `${nonce}:${ts}:${userId}`;
   const expected = createHmac("sha256", getSecret())
     .update(payload)
     .digest("hex");
 
   // Timing-safe comparison
+  if (!sig) return null;
   if (sig.length !== expected.length) return null;
   let mismatch = 0;
   for (let i = 0; i < sig.length; i++) {
@@ -79,5 +95,19 @@ export function verifyOAuthState(
   const age = Date.now() - parseInt(ts, 10);
   if (age > 10 * 60 * 1000 || age < 0) return null;
 
-  return { userId };
+  let returnTo: string | undefined;
+  if (encodedReturnTo) {
+    try {
+      const decoded = Buffer.from(encodedReturnTo, "base64url").toString(
+        "utf8"
+      );
+      if (decoded.startsWith("/")) {
+        returnTo = decoded;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return { userId, ...(returnTo ? { returnTo } : {}) };
 }

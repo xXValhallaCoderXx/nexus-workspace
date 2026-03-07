@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/get-session";
 import { Sidebar } from "@/components/layout/sidebar";
 import { getProcessingRunCount } from "@/lib/db/scoped-queries";
+import { onboardingPath, getOnboardingState } from "@/lib/onboarding/state";
 
 export default async function DashboardLayout({
   children,
@@ -11,6 +12,11 @@ export default async function DashboardLayout({
   const session = await getSession();
   if (!session?.user) {
     redirect("/");
+  }
+
+  const onboardingState = await getOnboardingState(session.user.id);
+  if (onboardingState.hasConfig && !onboardingState.completed) {
+    redirect(onboardingPath(onboardingState.step));
   }
 
   const processingCount = await getProcessingRunCount(session.user.id);
