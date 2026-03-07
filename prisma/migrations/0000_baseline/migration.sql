@@ -1,0 +1,2 @@
+-- Baseline: existing schema prior to connector additions
+-- This migration is intentionally empty as the database was provisioned manually

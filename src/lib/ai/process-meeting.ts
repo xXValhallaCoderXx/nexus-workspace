@@ -7,7 +7,7 @@ import {
 import { fetchTranscriptContent } from "@/lib/google/fetch-transcript";
 import { getUserConfig } from "@/lib/db/scoped-queries";
 import { decrypt } from "@/lib/crypto/encryption";
-import { getDestinationProvider, getEnabledDestinations } from "@/lib/destinations/router";
+import { deliverToAllDestinations } from "@/lib/destinations/router";
 
 const DEFAULT_MODEL = "google/gemini-2.0-flash-001";
 
@@ -19,7 +19,8 @@ export interface ProcessingResult {
 
 export async function processMeetingTranscript(
   userId: string,
-  fileId: string
+  fileId: string,
+  summaryId?: string
 ): Promise<ProcessingResult> {
   const transcript = await fetchTranscriptContent(userId, fileId);
   const config = await getUserConfig(userId);
@@ -63,30 +64,24 @@ export async function processMeetingTranscript(
   }
 
   // Deliver to all enabled destinations
-  const enabledDestinations = getEnabledDestinations(config);
-  const deliveredTo: string[] = [];
-
-  for (const dest of enabledDestinations) {
-    const provider = getDestinationProvider(dest);
-    const result = await provider.deliver(parsed, userId);
-    if (result.success) {
-      deliveredTo.push(dest);
-    } else {
-      console.error(
-        JSON.stringify({
-          level: "error",
-          event: "destination_delivery_failed",
-          userId,
-          destination: dest,
-          error: result.error,
-        })
-      );
-    }
-  }
+  const deliveredTo = summaryId
+    ? await deliverToAllDestinations(parsed, userId, summaryId)
+    : await (async () => {
+        // Legacy fallback when no summaryId
+        const { getEnabledDestinations, getDestinationProvider } = await import("@/lib/destinations/router");
+        const dests = getEnabledDestinations(config);
+        const results: string[] = [];
+        for (const dest of dests) {
+          const provider = getDestinationProvider(dest);
+          const result = await provider.deliver(parsed, userId);
+          if (result.success) results.push(dest);
+        }
+        return results.length > 0 ? results : ["DATABASE"];
+      })();
 
   return {
     payload: parsed,
     model: response.model,
-    destinations: deliveredTo.length > 0 ? deliveredTo : ["DATABASE"],
+    destinations: deliveredTo,
   };
 }

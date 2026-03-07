@@ -74,7 +74,7 @@ function HistoryTableInner({
         </div>
         <p className="text-sm font-medium text-text">No meetings found</p>
         <p className="mt-1 text-xs text-muted2">
-          Processed transcripts will appear here. Head to Notes to process your first transcript.
+          Processed transcripts will appear here and be delivered to your connected destinations. Head to Notes to process your first transcript.
         </p>
         <Link
           href="/dashboard/notes"
@@ -99,7 +99,7 @@ function HistoryTableInner({
                 Date
               </th>
               <th className="border-b border-border bg-surface2 px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted2">
-                Destination
+                Delivered to
               </th>
               <th className="border-b border-border bg-surface2 px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted2">
                 Status
@@ -133,7 +133,7 @@ function HistoryTableInner({
                     {formatDate(job.createdAt)}
                   </td>
                   <td className="border-b border-border px-4 py-3 text-[13px] text-muted2">
-                    {job.destinationDelivered ?? "—"}
+                    <DestinationPills destinations={job.destinationDelivered} />
                   </td>
                   <td className="border-b border-border px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -201,5 +201,32 @@ export function HistoryTable(props: {
     <Suspense>
       <HistoryTableInner {...props} />
     </Suspense>
+  );
+}
+
+const destinationLabels: Record<string, string> = {
+  DATABASE: "Nexus",
+  SLACK: "Slack",
+  CLICKUP: "ClickUp",
+  nexus_history: "Nexus",
+  slack: "Slack",
+  clickup: "ClickUp",
+};
+
+function DestinationPills({ destinations }: { destinations: string | null }) {
+  if (!destinations) return <span>—</span>;
+  const parts = destinations.split(",").map((d) => d.trim()).filter(Boolean);
+  if (parts.length === 0) return <span>—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {parts.map((dest) => (
+        <span
+          key={dest}
+          className="inline-flex items-center rounded-full border border-border bg-bg px-2 py-0.5 text-[10px] font-medium text-muted2"
+        >
+          {destinationLabels[dest] ?? dest}
+        </span>
+      ))}
+    </div>
   );
 }

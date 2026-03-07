@@ -22,5 +22,14 @@ export async function GET(
     ...job,
     createdAt: job.createdAt.toISOString(),
     completedAt: job.completedAt?.toISOString() ?? null,
+    deliveryLogs: job.deliveryLogs.map((dl) => ({
+      id: dl.id,
+      connectorId: dl.connectorId,
+      status: dl.status,
+      errorMessage: dl.errorMessage,
+      externalUrl: dl.externalUrl ?? null,
+      deliveredAt: dl.deliveredAt?.toISOString() ?? null,
+      retryCount: dl.retryCount,
+    })),
   });
 }

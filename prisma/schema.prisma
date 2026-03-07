@@ -23,6 +23,7 @@ model User {
   accounts             Account[]
   sessions             Session[]
   config               UserConfig?
+  connectorConfigs     UserConnectorConfig[]
   pushChannels         PushChannel[]
   jobHistory           JobHistory[]
   failedJobs           FailedJob[]
@@ -82,10 +83,63 @@ model UserConfig {
   slackDmEnabled           Boolean  @default(false)
   customSystemPrompt       String?  @db.Text
   drivePageToken           String?
+  // Dismissal flags for UI nudge cards
+  dismissedConnectorNudge  Boolean  @default(false)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ──────────────────────────────────────────────
+// Connector configuration (additive destination model)
+// ──────────────────────────────────────────────
+
+model UserConnectorConfig {
+  id           String          @id @default(cuid())
+  userId       String
+  connectorId  String          // 'nexus_history' | 'slack' | 'clickup'
+  enabled      Boolean         @default(true)
+  configJson   Json?           // Destination-specific config (e.g. ClickUp space)
+  oauthTokens  String?         @db.Text // Encrypted JSON: access_token, refresh_token, expires_at
+  status       ConnectorStatus @default(DISCONNECTED)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, connectorId])
+  @@index([userId])
+}
+
+model DeliveryLog {
+  id           String         @id @default(cuid())
+  summaryId    String
+  connectorId  String         // 'nexus_history' | 'slack' | 'clickup'
+  status       DeliveryStatus @default(PENDING)
+  errorMessage String?        @db.Text
+  externalUrl  String?        // Link to the delivered resource (e.g. ClickUp doc URL)
+  deliveredAt  DateTime?
+  retryCount   Int            @default(0)
+  createdAt    DateTime       @default(now())
+
+  summary JobHistory @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  @@index([summaryId])
+  @@index([connectorId])
+  @@index([status])
+}
+
+enum ConnectorStatus {
+  CONNECTED
+  DISCONNECTED
+  EXPIRED
+}
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
 }
 
 model PushChannel {
@@ -117,7 +171,8 @@ model JobHistory {
   createdAt            DateTime  @default(now())
   completedAt          DateTime?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveryLogs DeliveryLog[]
 
   @@index([userId])
   @@index([status])

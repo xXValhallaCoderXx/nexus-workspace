@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { NoteDetailModal } from "@/components/dashboard/note-detail-modal";
 import { useNoteModal } from "@/hooks/use-note-modal";
 import { cleanMeetingTitle } from "@/lib/utils/clean-meeting-title";
+import { FirstDeliveryBadge } from "@/components/dashboard/first-delivery-badge";
 
 interface Meeting {
   id: string;
@@ -14,6 +15,7 @@ interface Meeting {
   status: string;
   createdAt: string;
   resultPayload: Record<string, unknown> | null;
+  destinationDelivered?: string | null;
 }
 
 function MicIcon({ color }: { color: string }) {
@@ -57,7 +59,7 @@ function RecentMeetingsPanelInner({ meetings }: { meetings: Meeting[] }) {
             </div>
             <p className="text-sm font-medium text-text">No meetings yet</p>
             <p className="mt-1 text-xs text-muted2">
-              Your meeting summaries will appear here once a transcript is processed.
+              Your meeting summaries will appear here and be sent to your connected destinations once a transcript is processed.
             </p>
             <Link
               href="/dashboard/notes"
@@ -114,6 +116,14 @@ function RecentMeetingsPanelInner({ meetings }: { meetings: Meeting[] }) {
                 <div className="mt-[3px] text-[11px] text-muted2">
                   {formatDate(m.createdAt)}
                 </div>
+                {isReady && m.destinationDelivered && (
+                  <DeliveryLabels destinations={m.destinationDelivered} />
+                )}
+                {isReady && m.destinationDelivered && (
+                  <FirstDeliveryBadge
+                    destinations={m.destinationDelivered.split(",").map((d) => d.trim()).filter(Boolean)}
+                  />
+                )}
               </div>
             </div>
           );
@@ -121,6 +131,32 @@ function RecentMeetingsPanelInner({ meetings }: { meetings: Meeting[] }) {
       </div>
       <NoteDetailModal jobId={activeNoteId} onClose={closeNote} />
     </Card>
+  );
+}
+
+const destLabels: Record<string, string> = {
+  DATABASE: "Nexus",
+  SLACK: "Slack",
+  CLICKUP: "ClickUp",
+  nexus_history: "Nexus",
+  slack: "Slack",
+  clickup: "ClickUp",
+};
+
+function DeliveryLabels({ destinations }: { destinations: string }) {
+  const parts = destinations.split(",").map((d) => d.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {parts.map((d) => (
+        <span
+          key={d}
+          className="text-[9px] font-medium text-muted2"
+        >
+          {destLabels[d] ?? d}
+        </span>
+      ))}
+    </div>
   );
 }
 

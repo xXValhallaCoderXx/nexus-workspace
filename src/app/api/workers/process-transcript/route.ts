@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       });
 
   try {
-    const result = await processMeetingTranscript(userId, fileId);
+    const result = await processMeetingTranscript(userId, fileId, job.id);
 
     await prisma.jobHistory.update({
       where: { id: job.id },
