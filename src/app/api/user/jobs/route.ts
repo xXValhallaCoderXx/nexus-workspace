@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     const inputRefs = run.inputRefJson as Record<string, unknown> | null;
     return {
       id: run.id,
+      workflowType: run.workflowType,
       sourceFileId: inputRefs?.fileId ?? "",
       sourceFileName: inputRefs?.fileName ?? artifact?.title ?? null,
       status: run.status,

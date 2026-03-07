@@ -34,6 +34,9 @@ model User {
   sourceItems            SourceItem[]
   workflowRuns           WorkflowRun[]
   artifacts              Artifact[]
+
+  // Omnichannel triage
+  pendingNotifications PendingNotification[]
 }
 
 model Account {
@@ -86,6 +89,8 @@ model UserConfig {
   meetingSummariesEnabled Boolean  @default(false)
   customSystemPrompt      String?  @db.Text
   dismissedConnectorNudge Boolean  @default(false)
+  quietModeEnabled        Boolean  @default(false)
+  digestSchedule          Json?    // e.g. { "times": ["12:00", "16:00"], "timezone": "America/New_York" }
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -333,6 +338,27 @@ model ArtifactDelivery {
   @@index([artifactId])
   @@index([destinationConnectionId])
   @@index([status])
+}
+
+// ──────────────────────────────────────────────
+// Omnichannel Triage: Pending Notifications
+// ──────────────────────────────────────────────
+
+model PendingNotification {
+  id                String   @id @default(cuid())
+  userId            String
+  connectorId       String   // e.g. "slack", "teams"
+  externalMessageId String   // Platform-specific message ID for deduplication
+  authorName        String
+  content           String   @db.Text
+  metadata          Json?    // Platform-specific routing data (channel ID, permalink, etc.)
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, connectorId, externalMessageId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 // ──────────────────────────────────────────────

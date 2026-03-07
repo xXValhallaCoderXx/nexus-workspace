@@ -60,6 +60,7 @@ export default async function SettingsPage() {
           <SettingsWorkflows
             enabled={config?.meetingSummariesEnabled ?? false}
             slackDmEnabled={slackDmEnabled}
+            quietModeEnabled={config?.quietModeEnabled ?? false}
             hasSlackConnected={hasSlackConnected}
             connectorStatus={connectorStatusMap}
           />
