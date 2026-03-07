@@ -22,6 +22,8 @@ export async function upsertUserConfig(
     encryptedOpenRouterKey?: string | null;
     customSystemPrompt?: string | null;
     dismissedConnectorNudge?: boolean;
+    quietModeEnabled?: boolean;
+    digestSchedule?: Prisma.InputJsonValue;
   }
 ) {
   return prisma.userConfig.upsert({
