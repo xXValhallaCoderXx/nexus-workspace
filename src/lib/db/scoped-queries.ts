@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma, type PendingNotification } from "@/generated/prisma/client";
 import type {
   RunStatus,
   SourceProvider,
@@ -489,5 +489,69 @@ export async function destinationFetch(
       Authorization: `Bearer ${tokens.access_token}`,
       ...options.headers,
     },
+  });
+}
+
+// ── Pending Notification ────────────────────
+
+export async function createPendingNotification(data: {
+  userId: string;
+  connectorId: string;
+  externalMessageId: string;
+  authorName: string;
+  content: string;
+  metadata?: Prisma.InputJsonValue;
+}) {
+  const metadata =
+    data.metadata === undefined
+      ? undefined
+      : (data.metadata as Prisma.InputJsonValue);
+
+  return prisma.pendingNotification.upsert({
+    where: {
+      userId_connectorId_externalMessageId: {
+        userId: data.userId,
+        connectorId: data.connectorId,
+        externalMessageId: data.externalMessageId,
+      },
+    },
+    create: { ...data, metadata },
+    update: {},
+  });
+}
+
+export async function getPendingNotificationsByUser(userId: string) {
+  return prisma.pendingNotification.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function getPendingNotificationsGroupedByUser() {
+  const all = await prisma.pendingNotification.findMany({
+    orderBy: [{ userId: "asc" }, { createdAt: "asc" }],
+  });
+
+  const grouped = new Map<string, PendingNotification[]>();
+  for (const n of all) {
+    const list = grouped.get(n.userId);
+    if (list) {
+      list.push(n);
+    } else {
+      grouped.set(n.userId, [n]);
+    }
+  }
+  return grouped;
+}
+
+export async function deletePendingNotifications(ids: string[]) {
+  return prisma.pendingNotification.deleteMany({
+    where: { id: { in: ids } },
+  });
+}
+
+export async function getPendingNotificationCount(userId: string) {
+  return prisma.pendingNotification.count({
+    where: { userId },
   });
 }

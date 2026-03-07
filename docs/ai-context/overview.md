@@ -27,11 +27,12 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 
 ## Key Data Models (Prisma)
 - **User** — NextAuth user with accounts, sessions
-- **UserConfig** — per-user settings: `meetingSummariesEnabled` (auto-process toggle), `dismissedConnectorNudge`, encrypted OpenRouter API key, custom system prompt
+- **UserConfig** — per-user settings: `meetingSummariesEnabled` (auto-process toggle), `quietModeEnabled` (omnichannel triage toggle), `digestSchedule` (JSON with delivery times/timezone), `dismissedConnectorNudge`, encrypted OpenRouter API key, custom system prompt
 - **PushChannel** — Google Drive watch channel (channelId, resourceId, expiration)
 - **SourceConnection** — per-user source integration: provider (GOOGLE_DRIVE), status, configJson (stores drivePageToken), externalAccountId. Unique on (userId, provider).
 - **SourceEvent** — inbound webhook events: sourceConnectionId, eventType, dedupeKey, rawPayload, status (RECEIVED/PROCESSING/PROCESSED/FAILED)
 - **SourceItem** — individual items from a source: externalItemId (e.g. Drive file ID), title, sourceUrl. Unique on (sourceConnectionId, externalItemId).
+- **PendingNotification** — omnichannel triage queue: connectorId, externalMessageId, authorName, content, metadata (JSON). Unique on (userId, connectorId, externalMessageId). Processed and deleted by triage digest cron.
 - **DestinationConnection** — per-user destination integration: provider (NEXUS_HISTORY/SLACK/CLICKUP), status, enabled, configJson, encrypted oauthTokens, externalAccountId (e.g. Slack user ID). Unique on (userId, provider).
 - **WorkflowRun** — processing run: workflowType (MEETING_SUMMARY), triggerType, status (PENDING/PROCESSING/COMPLETED/FAILED), inputRefJson, modelUsed, errorMessage, metricsJson
 - **Artifact** — output of a workflow run: artifactType (MEETING_SUMMARY), title, summaryText, payloadJson, sourceRefsJson
@@ -66,9 +67,11 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 - `api/user/delivery/[id]/retry/` — Retry a failed artifact delivery
 - `api/user/alerts/acknowledge/` — Acknowledge channel renewal alerts
 - `api/webhooks/google-drive/` — Receives Google Drive push notifications, creates SourceEvent/SourceItem records
+- `api/webhooks/connectors/[connectorId]/` — Universal connector webhook endpoint for omnichannel ingestion (Slack Events API, etc.)
 - `api/workers/process-transcript/` — QStash worker: runs MeetingSummaryHandler, creates Artifact, delivers via planner
 - `api/workers/dead-letter/` — Dead letter handler
 - `api/cron/renew-channels/` — Cron job for push channel renewal (every 6h, 24h buffer before expiry)
+- `api/cron/process-triage-digest/` — Cron job for omnichannel triage digest (12 PM, 4 PM UTC): pulls PendingNotification records, classifies with LLM, delivers digest
 - `api/auth/slack/` — Slack OAuth flow (connect, callback, disconnect)
 - `api/auth/clickup/` — ClickUp OAuth flow (connect, callback, disconnect)
 
@@ -88,7 +91,7 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 - `google/` — Drive API: channel registration, transcript fetching, webhook verification, authenticated Drive client factory (`get-drive-client.ts`)
 - `queue/` — QStash client, job enqueue helper, signature verification
 - `redis/` — Redis client, deduplication helpers
-- `sources/` — Source provider contracts (`types.ts`): `SourceProviderContract` interface with `verifyRequest`, `resolveConnection`, `normalizeEvent`, `buildSourceItems`
+- `sources/` — Source provider contracts (`types.ts`): `SourceProviderContract` interface with `verifyRequest`, `resolveConnection`, `normalizeEvent`, `buildSourceItems`. Provider registry (`registry.ts`). Slack source provider (`slack/`) for Events API webhook ingestion.
 - `workflows/` — Workflow handler contracts and implementations: `WorkflowHandler` interface, `MeetingSummaryHandler` (fetches transcript, calls OpenRouter, validates with Zod, returns artifact data)
 - `utils/` — Shared utilities: `cleanMeetingTitle()` for parsing raw Google Meet filenames
 
@@ -99,6 +102,7 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 - `slack-provider.ts` — `SlackDestinationProvider`: reads slackUserId from `DestinationConnection.externalAccountId`, formats message via `slack-formatter.ts`, sends via Slack bot token.
 - `clickup-provider.ts` — `ClickUpDestinationProvider`: reads OAuth tokens from `DestinationConnection.oauthTokensEncrypted`, builds markdown via `markdown-formatter.ts`, creates/updates ClickUp Doc page. Returns externalUrl.
 - `slack-formatter.ts` — Formats meeting summary as Slack Block Kit message
+- `triage-formatter.ts` — Formats classified triage messages as Slack Block Kit digest and markdown
 - `markdown-formatter.ts` — Formats meeting summary as markdown (used by ClickUp)
 
 ### `src/hooks/` — Client-side hooks
@@ -153,6 +157,7 @@ Nexus is a **Meeting Intelligence** app that automatically captures Google Meet 
 - `OPENROUTER_API_KEY` — Global fallback OpenRouter key (users can provide their own via BYOK)
 - `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` — Slack OAuth app credentials
 - `SLACK_BOT_TOKEN` — Slack bot token for sending DMs
+- `SLACK_SIGNING_SECRET` — Slack app signing secret for webhook signature verification (omnichannel triage)
 - `CLICKUP_CLIENT_ID`, `CLICKUP_CLIENT_SECRET` — ClickUp OAuth app credentials
 - `CRON_SECRET` — Vercel cron authentication
 - `{PROVIDER}_REDIRECT_BASE_URL` — Per-provider OAuth redirect override (e.g. `SLACK_REDIRECT_BASE_URL` for ngrok HTTPS tunnel in dev)
