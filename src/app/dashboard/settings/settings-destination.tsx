@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import {
+  SettingsItem,
+  SettingsMetaPill,
+  SettingsNote,
+  SettingsPanel,
+  primaryButtonClassName,
+  secondaryButtonClassName,
+} from "./settings-ui";
 
 type ConnectorStatusMap = Record<
   string,
@@ -18,43 +26,55 @@ export function SettingsDestination({
   slackDmEnabled: boolean;
   connectorStatus: ConnectorStatusMap;
 }) {
-  const [disconnecting, setDisconnecting] = useState(false);
   const [slackEnabled, setSlackEnabled] = useState(slackDmEnabled);
-  const [clickupEnabled, setClickupEnabled] = useState(connectorStatus["clickup"]?.enabled ?? false);
+  const [clickupEnabled, setClickupEnabled] = useState(
+    connectorStatus["clickup"]?.enabled ?? false
+  );
   const [loadingToggle, setLoadingToggle] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const clickup = connectorStatus["clickup"];
-  const clickupReady = clickup?.status === "CONNECTED" && !!clickup?.configJson;
-
-  async function handleDisconnectSlack() {
-    setDisconnecting(true);
-    try {
-      const res = await fetch("/api/auth/slack/disconnect", { method: "POST" });
-      if (res.ok) window.location.reload();
-    } finally {
-      setDisconnecting(false);
-    }
-  }
+  const clickupConnected = clickup?.status === "CONNECTED";
+  const clickupExpired = clickup?.status === "EXPIRED";
+  const clickupReady = clickupConnected && !!clickup?.configJson;
+  const clickupConfigLabel = getClickUpConfigLabel(clickup?.configJson ?? null);
+  const activeDestinationCount =
+    1 +
+    Number(hasSlackConnected && slackEnabled) +
+    Number(clickupReady && clickupEnabled);
 
   async function handleToggleSlack() {
     const newValue = !slackEnabled;
     setLoadingToggle("slack");
+    setError(null);
     try {
       const res = await fetch("/api/user/config", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slackDmEnabled: newValue }),
       });
-      if (res.ok) setSlackEnabled(newValue);
+      if (!res.ok) {
+        setError(
+          await readErrorMessage(res, "Failed to update Slack delivery.")
+        );
+        return;
+      }
+      setSlackEnabled(newValue);
+    } catch (toggleError) {
+      setError(
+        toggleError instanceof Error
+          ? toggleError.message
+          : "Failed to update Slack delivery."
+      );
     } finally {
       setLoadingToggle(null);
     }
   }
 
   async function handleToggleConnector(connectorId: string) {
-    const currentValue = clickupEnabled;
-    const newValue = !currentValue;
+    const newValue = !clickupEnabled;
     setLoadingToggle(connectorId);
+    setError(null);
     try {
       const res = await fetch(`/api/user/connectors/${connectorId}/config`, {
         method: "POST",
@@ -64,113 +84,261 @@ export function SettingsDestination({
           enabled: newValue,
         }),
       });
-      if (res.ok) {
-        setClickupEnabled(newValue);
+      if (!res.ok) {
+        setError(
+          await readErrorMessage(res, "Failed to update ClickUp delivery.")
+        );
+        return;
       }
+      setClickupEnabled(newValue);
+    } catch (toggleError) {
+      setError(
+        toggleError instanceof Error
+          ? toggleError.message
+          : "Failed to update ClickUp delivery."
+      );
     } finally {
       setLoadingToggle(null);
     }
   }
 
-  return (
-    <div className="rounded-[14px] border border-border bg-surface p-[22px] shadow-card">
-      <div className="text-[13px] font-bold text-text">Output Destinations</div>
-      <div className="mb-[18px] text-xs text-muted2">
-        Choose where your meeting summaries are delivered. Nexus History is always on. Add as many destinations as you like.
-      </div>
+  function startOAuth(path: string) {
+    window.location.assign(path);
+  }
 
-      {/* Nexus History — always on */}
-      <DestinationRow
-        name="Nexus History"
-        description="Always on — view in Meetings page"
-        alwaysOn
+  function openClickUpConfiguration() {
+    window.location.assign("/dashboard/settings?configure=clickup");
+  }
+
+  return (
+    <SettingsPanel
+      icon={
+        <svg
+          width="20"
+          height="20"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6 12h12m0 0l-4-4m4 4l-4 4M4 6h10m-10 12h10"
+          />
+        </svg>
+      }
+      eyebrow="Delivery"
+      title="Destinations"
+      description="Nexus History is always on. Layer Slack and ClickUp on top when you want notifications or generated docs to flow somewhere else."
+      badge={
+        <StatusBadge variant={activeDestinationCount > 1 ? "connected" : "active"}>
+          {activeDestinationCount} active
+        </StatusBadge>
+      }
+      bodyClassName="space-y-3 p-6"
+    >
+      {error ? <SettingsNote tone="red">{error}</SettingsNote> : null}
+
+      <SettingsItem
+        tone="brand"
+        icon={<DestinationGlyph label="N" className="text-brand" />}
+        title="Nexus History"
+        description="Every summary is stored in Nexus so you always have a built-in archive to browse from the Meetings and Notes workspaces."
+        badge={<StatusBadge variant="connected">Always on</StatusBadge>}
+        footer={
+          <div className="flex flex-wrap gap-2">
+            <SettingsMetaPill tone="brand">
+              Searchable in your workspace
+            </SettingsMetaPill>
+          </div>
+        }
       />
 
-      {/* Slack DM */}
-      <DestinationRow
-        name="Slack DM"
+      <SettingsItem
+        tone={hasSlackConnected ? (slackEnabled ? "brand" : "neutral") : "neutral"}
+        icon={<DestinationGlyph label="S" className="text-[#7C3AED]" />}
+        title="Slack DMs"
         description={
           hasSlackConnected
-            ? "Sends a DM when summary is ready"
-            : "Not connected"
+            ? "Send a direct message when a meeting summary is ready."
+            : "Connect Slack to send direct-message alerts and unlock Quiet Mode digests."
         }
-        available={hasSlackConnected}
-        enabled={slackEnabled}
-        onToggle={handleToggleSlack}
-        loading={loadingToggle === "slack"}
-        connectHref={hasSlackConnected ? undefined : "/api/auth/slack"}
+        badge={
+          <StatusBadge
+            variant={
+              hasSlackConnected
+                ? slackEnabled
+                  ? "connected"
+                  : "pending"
+                : "pending"
+            }
+          >
+            {hasSlackConnected
+              ? slackEnabled
+                ? "Sending"
+                : "Connected"
+              : "Not connected"}
+          </StatusBadge>
+        }
+        action={
+          hasSlackConnected ? (
+            <ToggleSwitch
+              enabled={slackEnabled}
+              onToggle={handleToggleSlack}
+              disabled={loadingToggle === "slack"}
+            />
+          ) : (
+            <button
+              onClick={() => startOAuth("/api/auth/slack")}
+              className={primaryButtonClassName}
+            >
+              Connect Slack
+            </button>
+          )
+        }
+        footer={
+          <div className="flex flex-wrap gap-2">
+            <SettingsMetaPill tone={hasSlackConnected ? "brand" : "neutral"}>
+              {hasSlackConnected
+                ? "Pairs with workflow completion alerts"
+                : "Optional destination for ready notifications"}
+            </SettingsMetaPill>
+          </div>
+        }
       />
 
-      {/* ClickUp */}
-      <DestinationRow
-        name="ClickUp"
-        description={
-          clickupReady
-            ? "Creates a doc in the selected space"
-            : clickup?.status === "CONNECTED"
-              ? "Configure a space in Connections"
-              : "Not connected"
+      <SettingsItem
+        tone={
+          clickupExpired
+            ? "amber"
+            : clickupReady && clickupEnabled
+              ? "brand"
+              : clickupConnected
+                ? "amber"
+                : "neutral"
         }
-        available={clickupReady}
-        enabled={clickupEnabled}
-        onToggle={() => handleToggleConnector("clickup")}
-        loading={loadingToggle === "clickup"}
-        connectHref={clickupReady ? undefined : "/api/auth/clickup"}
-        isLast
+        icon={<DestinationGlyph label="C" className="text-[#4F46E5]" />}
+        title="ClickUp docs"
+        description={
+          clickupExpired
+            ? "Refresh ClickUp authorization to resume document delivery."
+            : clickupReady
+              ? "Create a ClickUp doc in the selected destination whenever a summary completes."
+              : clickupConnected
+                ? "Choose the workspace, space, and optional folder before enabling doc delivery."
+                : "Connect ClickUp to turn finished summaries into project docs."
+        }
+        badge={
+          <StatusBadge
+            variant={
+              clickupExpired
+                ? "expired"
+                : clickupReady && clickupEnabled
+                  ? "connected"
+                  : clickupReady
+                    ? "pending"
+                    : clickupConnected
+                      ? "active"
+                      : "pending"
+            }
+          >
+            {clickupExpired
+              ? "Expired"
+              : clickupReady && clickupEnabled
+                ? "Sending"
+                : clickupReady
+                  ? "Ready"
+                  : clickupConnected
+                    ? "Needs setup"
+                    : "Not connected"}
+          </StatusBadge>
+        }
+        action={
+          clickupReady ? (
+            <ToggleSwitch
+              enabled={clickupEnabled}
+              onToggle={() => handleToggleConnector("clickup")}
+              disabled={loadingToggle === "clickup"}
+            />
+          ) : clickupExpired ? (
+            <button
+              onClick={() => startOAuth("/api/auth/clickup")}
+              className={primaryButtonClassName}
+            >
+              Reconnect ClickUp
+            </button>
+          ) : clickupConnected ? (
+            <button
+              onClick={openClickUpConfiguration}
+              className={secondaryButtonClassName}
+            >
+              Configure path
+            </button>
+          ) : (
+            <button
+              onClick={() => startOAuth("/api/auth/clickup")}
+              className={primaryButtonClassName}
+            >
+              Connect ClickUp
+            </button>
+          )
+        }
+        footer={
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {clickupConfigLabel ? (
+                <SettingsMetaPill tone="brand">
+                  {clickupConfigLabel}
+                </SettingsMetaPill>
+              ) : (
+                <SettingsMetaPill tone={clickupExpired ? "amber" : "neutral"}>
+                  {clickupConnected
+                    ? "Destination path still needs configuration"
+                    : "Optional document destination"}
+                </SettingsMetaPill>
+              )}
+            </div>
+            {clickupConnected && !clickupExpired ? (
+              <button
+                onClick={openClickUpConfiguration}
+                className={secondaryButtonClassName}
+              >
+                {clickupConfigLabel ? "Change path" : "Finish setup"}
+              </button>
+            ) : null}
+          </div>
+        }
       />
-    </div>
+    </SettingsPanel>
   );
 }
 
-function DestinationRow({
-  name,
-  description,
-  alwaysOn,
-  available,
-  enabled,
-  onToggle,
-  loading,
-  connectHref,
-  isLast,
+function DestinationGlyph({
+  label,
+  className,
 }: {
-  name: string;
-  description: string;
-  alwaysOn?: boolean;
-  available?: boolean;
-  enabled?: boolean;
-  onToggle?: () => void;
-  loading?: boolean;
-  connectHref?: string;
-  isLast?: boolean;
+  label: string;
+  className: string;
 }) {
-  return (
-    <div
-      className={`flex items-center justify-between rounded-[9px] border border-border bg-bg px-3 py-[9px] ${isLast ? "" : "mb-2.5"}`}
-    >
-      <div>
-        <div className={`text-[13px] font-medium ${available || alwaysOn ? "text-text" : "text-muted2"}`}>
-          {name}
-        </div>
-        <div className="mt-[2px] text-[11px] text-muted2">{description}</div>
-      </div>
-      {alwaysOn ? (
-        <StatusBadge variant="connected">Always on</StatusBadge>
-      ) : available ? (
-        <ToggleSwitch
-          enabled={enabled ?? false}
-          onToggle={onToggle ?? (() => {})}
-          disabled={loading}
-        />
-      ) : connectHref ? (
-        <a
-          href={connectHref}
-          className="text-xs font-medium text-brand hover:underline"
-        >
-          Connect
-        </a>
-      ) : (
-        <span className="text-[11px] text-muted2">Unavailable</span>
-      )}
-    </div>
-  );
+  return <span className={`text-sm font-black ${className}`}>{label}</span>;
+}
+
+function getClickUpConfigLabel(configJson: Record<string, unknown> | null) {
+  if (!configJson) return null;
+  const parts = [
+    configJson.workspace_name,
+    configJson.space_name,
+    configJson.folder_name,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" > ") : null;
+}
+
+async function readErrorMessage(res: Response, fallback: string) {
+  try {
+    const data = (await res.json()) as { error?: string; message?: string };
+    return data.error ?? data.message ?? fallback;
+  } catch {
+    return fallback;
+  }
 }
